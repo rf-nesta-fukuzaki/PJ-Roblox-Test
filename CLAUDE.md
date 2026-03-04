@@ -49,7 +49,7 @@ rojo serve
 
 ## Game Architecture
 
-**ゲーム名**: "Dash to the Stars" — トレーニングゾーンでJumpPower/Speedを積み上げ、発射台から高く飛ぶインクリメンタル系ゲーム。
+**ゲーム名**: "Dash to the Stars" — 画面をタップしてJumpPower/Speedを積み上げ、発射台から高く飛ぶインクリメンタル系ゲーム。目標は10億パワーを貯めてリバースすること。
 
 ### 共有モジュール (`src/shared/`)
 
@@ -63,37 +63,55 @@ rojo serve
 `init.client.luau` → `GameFlow.init()` が全クライアントモジュールを**依存関係順**に初期化する:
 
 ```
-SoundManager → MiniHUD → TrainingUI → MovementController
-→ TrainingZoneDetector → AltitudeTracker → KillBrickHandler
+SoundManager → MiniHUD → TrainingUI → MovementController →
+ClickAnywhere → DistanceTracker → RebirthUI → ShopUI →
+ZoneDetector → AltitudeTracker → KillBrickHandler → PlatformPhaser →
+RandomEvents → SoundManager.playBGM()
 ```
 
 全モジュールは `Module.init()` パターンを持つ。`Effects` は init なしで直接呼び出す。
 
 | クライアントモジュール | 役割 |
 |---|---|
-| `SoundManager` | SoundService に Sound インスタンスを配置して2D再生 |
-| `MiniHUD` | 左上の常時表示ステータスパネル |
-| `TrainingUI` | トレーニングボタンUI（トレーニングゾーン内のみ表示）|
+| `SoundManager` | SoundService に Sound インスタンスを配置して2D再生。playFanfare()はリバース時のファンファーレ |
+| `MiniHUD` | 左上の常時表示ステータスパネル。数値はカンマ区切り、PowerGauge>=10億で金色パルス |
+| `TrainingUI` | 下部ステータスバー（👟シューズ｜💪クリック力｜⚡パワー｜💰コイン）と進化演出 |
+| `ClickAnywhere` | 画面どこでもクリック/タップでトレーニング。GUIボタンにはブロックされる |
 | `MovementController` | PlayerData の値を Humanoid.WalkSpeed / JumpPower に反映 |
-| `TrainingZoneDetector` | 0.2秒ポーリングでゾーン在/不在を検知しTrainingUIを表示切替 |
+| `DistanceTracker` | 走行距離を計測しPlayerData.addDistanceを呼ぶ |
+| `ZoneDetector` | 0.2秒ポーリングでゾーン在/不在を検知しRebirthUI/ShopUIを表示切替 |
 | `AltitudeTracker` | 0.1秒ポーリングで高度監視・自己ベスト更新・マイルストーン通知 |
 | `KillBrickHandler` | Workspace の `KillBrick` に触れたらリスポーン |
+| `RandomEvents` | 15〜45秒間隔でコインシャワー/パワーブースト/ラッキースターを発生 |
 | `Effects` | パーティクル・トレイル・画面フラッシュなどのビジュアルエフェクト |
+| `RebirthUI` | リバースステーションUI。進捗バー付き。リバース時に豪華演出+ファンファーレ |
+| `ShopUI` | ショップUI（シューズ/トレイル）。ゾーン検知で自動スライドイン/アウト |
+| `PlatformPhaser` | プラットフォームの透過処理 |
 
 ### サーバースクリプト
 
 | スクリプト | 役割 |
 |---|---|
-| `MapBuilder.server.luau` | 起動時にTrainingZone・LaunchPad・AltitudeMarkersをWorkspaceに生成 |
+| `MapBuilder.server.luau` | 起動時にLaunchPad・AltitudeMarkersをWorkspaceに生成 |
 | `MapDecorator.server.luau` | 高度帯別にプラットフォームを装飾（Lighting/雲/Neonなど）|
 
 ### 設計上の注意点
 
-- **RemoteEvent/Function は未使用** — すべてのゲームロジックはクライアント側で処理
+- **クリック方式**: 画面タップ（ClickAnywhere）が主操作。`UserInputService.InputBegan` でgameProcessed=falseのみ処理
+- **RemoteEvent/Function は最小限** — リーダーボード更新のみ使用
 - **PlayerData は永続化なし** — リロードでリセットされる（DataStore未実装）
+- **boostMultiplier**: `PlayerData.setBoostMultiplier(2)` でクリック力2倍（RandomEventsのパワーブーストで使用）
 - `KillBrick` はWorkspaceに存在する前提でクライアントが `WaitForChild` する
 - `Workspace.Platforms` フォルダが存在しない場合、MapDecorator は warn してスキップ
-- `Config.TrainingZoneBounds` の座標はMapBuilderが生成するTrainingZoneのFloor位置と一致させること
+- `Config.RebirthZoneBounds` / `Config.ShopZoneBounds` の座標はMapBuilderが生成するゾーン位置と一致させること
+- `Config.TrainingZoneBounds` は削除済み（ClickAnywhereで常時クリック可能なため不要）
+
+### リバース条件
+
+- **MinPowerGauge = 1,000,000,000 (10億)** — 大きな目標
+- CoinsPerPower = 0.000001 → 10億パワーで1,000コイン獲得
+- リバース後: JumpPower/Speed/PowerGauge/TotalDistanceリセット、Coins/RebirthCount/MaxAltitude保持
+- リバース演出: 白→金フラッシュ + 「🌟 REBIRTH! 🌟」バウンステキスト + ファンファーレ
 
 ## Notes
 

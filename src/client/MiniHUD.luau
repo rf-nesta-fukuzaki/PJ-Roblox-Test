@@ -6,6 +6,7 @@ local TweenService      = game:GetService("TweenService")
 
 local PlayerData = require(ReplicatedStorage.Shared.PlayerData)
 local Config     = require(ReplicatedStorage.Shared.Config)
+local Format     = require(ReplicatedStorage.Shared.Format)
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
@@ -25,8 +26,10 @@ local ROW_DEFS = {
 	{ key = "Stage",        icon = "⭐",   label = "Stage",      suffix = ""   },
 }
 
-local rowLabels = {} :: { [string]: TextLabel }
-local hudFrame  = nil :: Frame?
+local rowLabels  = {} :: { [string]: TextLabel }
+local hudFrame   = nil :: Frame?
+local gaugeLabel = nil :: TextLabel?  -- PowerGauge行への参照（パルス用）
+local gaugeGold  = false
 
 -- ─────────────────────────────────────────
 -- ポップアニメーション
@@ -42,6 +45,29 @@ local function popLabel(lbl: TextLabel)
 	TweenService:Create(sc, TweenInfo.new(0.07, Enum.EasingStyle.Quad), { Scale = 1.2 }):Play()
 	task.delay(0.07, function()
 		TweenService:Create(sc, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { Scale = 1.0 }):Play()
+	end)
+end
+
+-- ─────────────────────────────────────────
+-- PowerGaugeパルスアニメ（10億以上のとき）
+-- ─────────────────────────────────────────
+
+local function startGaugePulse()
+	local lbl = gaugeLabel
+	if not lbl then return end
+	local sc = lbl:FindFirstChildOfClass("UIScale")
+	if not sc then
+		sc        = Instance.new("UIScale")
+		sc.Scale  = 1
+		sc.Parent = lbl
+	end
+	task.spawn(function()
+		while gaugeGold and gaugeLabel do
+			TweenService:Create(sc, TweenInfo.new(0.5, Enum.EasingStyle.Quad), { Scale = 1.1 }):Play()
+			task.wait(0.5)
+			TweenService:Create(sc, TweenInfo.new(0.5, Enum.EasingStyle.Quad), { Scale = 1.0 }):Play()
+			task.wait(0.5)
+		end
 	end)
 end
 
@@ -75,9 +101,29 @@ function MiniHUD.update()
 			local name  = if shoes then shoes.name else "なし"
 			newText = row.icon .. " " .. row.label .. ": " .. name
 
+		elseif row.key == "PowerGauge" then
+			local val  = d[row.key] :: number
+			newText = row.icon .. " " .. row.label .. ": " .. Format.commaNumber(val) .. row.suffix
+			-- 10億以上で金色パルス
+			local isGold = val >= Config.Rebirth.MinPowerGauge
+			if isGold and not gaugeGold then
+				gaugeGold = true
+				lbl.TextColor3 = Color3.fromRGB(255, 215, 0)
+				lbl.Font       = Enum.Font.GothamBold
+				startGaugePulse()
+			elseif not isGold and gaugeGold then
+				gaugeGold = false
+				lbl.TextColor3 = Color3.fromRGB(230, 230, 230)
+				lbl.Font       = Enum.Font.Gotham
+			end
+
+		elseif row.key == "Coins" then
+			local val = d[row.key] :: number
+			newText = row.icon .. " " .. row.label .. ": " .. Format.commaNumber(val) .. row.suffix
+
 		else
 			newText = row.icon .. " " .. row.label .. ": "
-				.. math.floor(d[row.key] :: number) .. row.suffix
+				.. Format.commaNumber(d[row.key] :: number) .. row.suffix
 		end
 
 		if newText ~= lbl.Text then
@@ -157,6 +203,10 @@ function MiniHUD.init()
 			lbl.TextSize   = 13
 		end
 
+		if row.key == "PowerGauge" then
+			gaugeLabel = lbl
+		end
+
 		rowLabels[row.key] = lbl
 	end
 
@@ -181,6 +231,11 @@ function MiniHUD.init()
 		-- 循環参照を避けるためlazy require
 		local AltitudeTracker = require(script.Parent.AltitudeTracker)
 		AltitudeTracker.resetMilestones()
+		gaugeGold = false
+		if gaugeLabel then
+			gaugeLabel.TextColor3 = Color3.fromRGB(230, 230, 230)
+			gaugeLabel.Font       = Enum.Font.Gotham
+		end
 		MiniHUD.update()
 	end)
 

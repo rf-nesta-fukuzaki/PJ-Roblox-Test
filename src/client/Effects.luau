@@ -457,4 +457,44 @@ function Effects.evolutionFlash(stage: number)
 	end)
 end
 
+-- ─────────────────────────────────────────
+-- (j) シューズ装備時の足元パーティクル
+-- ─────────────────────────────────────────
+
+function Effects.shoeEquipParticle(color: Color3)
+	local char = LocalPlayer.Character
+	if not char then return end
+	local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then return end
+
+	local part = Instance.new("Part")
+	part.Size         = Vector3.new(0.1, 0.1, 0.1)
+	part.CFrame       = root.CFrame + Vector3.new(0, -2.5, 0)
+	part.Anchored     = true
+	part.CanCollide   = false
+	part.Transparency = 1
+	part.CastShadow   = false
+	part.Parent       = workspace
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, color),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+	})
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.3),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	emitter.Lifetime       = NumberRange.new(0.3, 0.5)
+	emitter.Speed          = NumberRange.new(3, 8)
+	emitter.SpreadAngle    = Vector2.new(70, 70)
+	emitter.Rate           = 0
+	emitter.LightEmission  = 0.8
+	emitter.LightInfluence = 0.2
+	emitter.Parent         = part
+
+	emitter:Emit(24)
+	Debris:AddItem(part, 1)
+end
+
 return Effects

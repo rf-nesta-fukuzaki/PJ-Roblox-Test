@@ -18,6 +18,7 @@ function GameFlow.init()
 	local MiniHUD            = require(script.Parent.MiniHUD)
 	local TrainingUI         = require(script.Parent.TrainingUI)
 	local MovementController = require(script.Parent.MovementController)
+	local ClickAnywhere      = require(script.Parent.ClickAnywhere)
 	local DistanceTracker    = require(script.Parent.DistanceTracker)
 	local RebirthUI          = require(script.Parent.RebirthUI)
 	local ShopUI             = require(script.Parent.ShopUI)
@@ -25,11 +26,13 @@ function GameFlow.init()
 	local AltitudeTracker    = require(script.Parent.AltitudeTracker)
 	local KillBrickHandler   = require(script.Parent.KillBrickHandler)
 	local PlatformPhaser     = require(script.Parent.PlatformPhaser)
+	local RandomEvents       = require(script.Parent.RandomEvents)
 
 	SoundManager.init()
 	MiniHUD.init()
 	TrainingUI.init()
 	MovementController.init()
+	ClickAnywhere.init()
 	DistanceTracker.init()
 	RebirthUI.init()
 	ShopUI.init()
@@ -37,8 +40,30 @@ function GameFlow.init()
 	AltitudeTracker.init()
 	KillBrickHandler.init()
 	PlatformPhaser.init()
+	RandomEvents.init()
 
 	SoundManager.playBGM()
+
+	-- ─────────────────────────────────────────
+	-- テストチェックリスト（コンソール出力）
+	-- ─────────────────────────────────────────
+	print([[
+[テストチェックリスト]
+1.  ゲーム起動 → ウェルカムメッセージが表示されるか
+2.  画面のどこをクリックしても絵文字+数字が表示されるか
+3.  JumpPower が増加するか (MiniHUD で確認)
+4.  連打でコンボテキストが表示されるか
+5.  走ると Speed が増えるか
+6.  ショップエリア (Z=50〜80付近) に歩くとショップUIが自動表示されるか
+7.  コイン不足のアイテムが赤、購入可能が緑で表示されるか
+8.  リバースエリア (Z=-80〜-50付近) でリバースUIが自動表示されるか
+9.  PowerGauge の進捗バーが表示されるか
+10. 足場に下からジャンプすると通り抜け、上からは乗れるか
+11. ランダムイベント (コインシャワー/パワーブースト/ラッキースター) が発生するか
+12. BGMが再生されているか
+13. KillBrick (-50m) で死亡→リスポーンするか
+14. リーダーボードに「最高高度」「リバース」が表示されるか
+]])
 
 	-- ─────────────────────────────────────────
 	-- ウェルカムメッセージ（タイプライター演出）
@@ -100,7 +125,7 @@ function GameFlow.init()
 	subLabel.Parent                 = bg
 
 	-- タイプライター演出
-	local SUB_TEXT = "トレーニングで鍛えて、空高く飛び立て！"
+	local SUB_TEXT = "画面をタップして鍛えよう！🌟 目指せ10億パワー！"
 	task.spawn(function()
 		for i = 1, #SUB_TEXT do
 			subLabel.Text = SUB_TEXT:sub(1, i)

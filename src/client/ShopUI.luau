@@ -7,6 +7,7 @@ local TweenService      = game:GetService("TweenService")
 local PlayerData   = require(ReplicatedStorage.Shared.PlayerData)
 local Config       = require(ReplicatedStorage.Shared.Config)
 local MiniHUD      = require(script.Parent.MiniHUD)
+local TrainingUI   = require(script.Parent.TrainingUI)
 local SoundManager = require(script.Parent.SoundManager)
 local Effects      = require(script.Parent.Effects)
 
@@ -28,15 +29,25 @@ local currentTab = "shoes"  -- "shoes" | "trails"
 local tabBtns    = {} :: { [string]: TextButton }
 
 -- ─────────────────────────────────────────
--- カラー定数
+-- カラー定数（仕様通り）
 -- ─────────────────────────────────────────
 local TAB_ACTIVE   = Color3.fromRGB(52, 152, 219)
 local TAB_INACTIVE = Color3.fromRGB(50, 50, 70)
 
-local BTN_BUY      = Color3.fromRGB(39, 174,  96)  -- 購入可能（緑）
-local BTN_NOFUND   = Color3.fromRGB(176,  58,  46)  -- コイン不足（赤）
-local BTN_EQUIP    = Color3.fromRGB(41,  128, 185)  -- 装備可能（青）
-local BTN_EQUIPPED = Color3.fromRGB(74,   35,  90)  -- 装備中（ダーク紫）
+local BTN_BUY      = Color3.fromRGB(30,  200,  60)   -- 購入可能（鮮緑）
+local BTN_NOFUND   = Color3.fromRGB(220,  50,  50)   -- コイン不足（鮮赤）
+local BTN_EQUIP    = Color3.fromRGB(50,  130, 230)   -- 装備可能（鮮青）
+local BTN_EQUIPPED = Color3.fromRGB(140,  50, 200)   -- 装備中（紫）
+
+-- シューズカラーマッピング（足元パーティクル用）
+local SHOE_COLORS: { [string]: Color3 } = {
+	starter   = Color3.fromRGB(100, 160, 220),
+	runner    = Color3.fromRGB(100, 220, 100),
+	springs   = Color3.fromRGB(255, 210, 50),
+	rocket    = Color3.fromRGB(255, 100, 50),
+	legendary = Color3.fromRGB(255, 215, 0),
+	galaxy    = Color3.fromRGB(150, 80, 255),
+}
 
 -- アイコンマッピング（idから絵文字）
 local ICON_MAP: { [string]: string } = {
@@ -58,6 +69,62 @@ local function getItemIcon(id: string): string
 end
 
 -- ─────────────────────────────────────────
+-- 購入可能ボタンのパルスアニメ（2秒ループ）
+-- ─────────────────────────────────────────
+
+local function startBuyPulse(btn: TextButton)
+	local sc = Instance.new("UIScale")
+	sc.Scale  = 1
+	sc.Parent = btn
+
+	local running = true
+	-- ボタンが削除されたら停止
+	btn.AncestryChanged:Connect(function()
+		if not btn.Parent then running = false end
+	end)
+
+	task.spawn(function()
+		while running and btn.Parent do
+			TweenService:Create(sc, TweenInfo.new(0.5, Enum.EasingStyle.Quad), { Scale = 1.05 }):Play()
+			task.wait(0.5)
+			TweenService:Create(sc, TweenInfo.new(0.5, Enum.EasingStyle.Quad), { Scale = 1.0 }):Play()
+			task.wait(1.0)
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────
+-- コイン不足テキスト表示（0.8秒）
+-- ─────────────────────────────────────────
+
+local function showShortageText(frame: Frame, shortage: number)
+	-- 既存テキストがあれば削除
+	local existing = frame:FindFirstChild("ShortageLabel")
+	if existing then existing:Destroy() end
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Name                   = "ShortageLabel"
+	lbl.AnchorPoint            = Vector2.new(0.5, 1)
+	lbl.Size                   = UDim2.new(1, -10, 0, 26)
+	lbl.Position               = UDim2.new(0.5, 0, 1, -6)
+	lbl.BackgroundTransparency = 1
+	lbl.Text                   = "あと " .. shortage .. " コイン！"
+	lbl.TextColor3             = Color3.fromRGB(255, 100, 100)
+	lbl.Font                   = Enum.Font.GothamBold
+	lbl.TextSize               = 14
+	lbl.TextTransparency       = 0
+	lbl.ZIndex                 = 13
+	lbl.Parent                 = frame
+
+	task.delay(0.8, function()
+		if lbl.Parent then
+			TweenService:Create(lbl, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
+			task.delay(0.3, function() if lbl.Parent then lbl:Destroy() end end)
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────
 -- アイテム一覧の再構築
 -- ─────────────────────────────────────────
 
@@ -73,7 +140,7 @@ local function rebuildItems()
 	local items    = if isShoes then Config.Shoes      else Config.Trails
 	local equipped = if isShoes then d.EquippedShoes   else d.EquippedTrail
 
-	local ITEM_H = 120
+	local ITEM_H = 130
 
 	for i, id in ipairs(order) do
 		local item = items[id]
@@ -97,7 +164,7 @@ local function rebuildItems()
 		fCorner.CornerRadius = UDim.new(0, 10)
 		fCorner.Parent       = frame
 
-		-- アイコンフレーム（60×60、左端中央）
+		-- アイコンフレーム（左端中央）
 		local iconFrame = Instance.new("Frame")
 		iconFrame.Name                   = "IconFrame"
 		iconFrame.Size                   = UDim2.new(0, 56, 0, 56)
@@ -119,39 +186,39 @@ local function rebuildItems()
 		iconLbl.Font                   = Enum.Font.GothamBold
 		iconLbl.Parent                 = iconFrame
 
-		-- アイテム名（アイコン右）
+		-- アイテム名
 		local nameLbl = Instance.new("TextLabel")
-		nameLbl.Size                   = UDim2.new(1, -200, 0, 26)
+		nameLbl.Size                   = UDim2.new(1, -200, 0, 24)
 		nameLbl.Position               = UDim2.new(0, 76, 0, 10)
 		nameLbl.BackgroundTransparency = 1
 		nameLbl.Text                   = item.name
 		nameLbl.TextColor3             = Color3.fromRGB(255, 255, 255)
 		nameLbl.Font                   = Enum.Font.GothamBold
-		nameLbl.TextSize               = 17
+		nameLbl.TextSize               = 16
 		nameLbl.TextXAlignment         = Enum.TextXAlignment.Left
 		nameLbl.Parent                 = frame
 
 		-- 価格（右上）
 		local priceLbl = Instance.new("TextLabel")
-		priceLbl.Size                   = UDim2.new(0, 100, 0, 26)
+		priceLbl.Size                   = UDim2.new(0, 100, 0, 24)
 		priceLbl.Position               = UDim2.new(1, -112, 0, 10)
 		priceLbl.BackgroundTransparency = 1
 		priceLbl.Text                   = if item.cost == 0 then "無料" else "💰 " .. item.cost
 		priceLbl.TextColor3             = Color3.fromRGB(255, 215, 0)
 		priceLbl.Font                   = Enum.Font.GothamBold
-		priceLbl.TextSize               = 15
+		priceLbl.TextSize               = 14
 		priceLbl.TextXAlignment         = Enum.TextXAlignment.Right
 		priceLbl.Parent                 = frame
 
-		-- 説明（アイコン右、2行目）
+		-- 説明（2行目）
 		local descLbl = Instance.new("TextLabel")
-		descLbl.Size                   = UDim2.new(1, -80, 0, 20)
-		descLbl.Position               = UDim2.new(0, 76, 0, 38)
+		descLbl.Size                   = UDim2.new(1, -80, 0, 18)
+		descLbl.Position               = UDim2.new(0, 76, 0, 36)
 		descLbl.BackgroundTransparency = 1
 		descLbl.Text                   = item.description
 		descLbl.TextColor3             = Color3.fromRGB(180, 180, 180)
 		descLbl.Font                   = Enum.Font.Gotham
-		descLbl.TextSize               = 13
+		descLbl.TextSize               = 12
 		descLbl.TextXAlignment         = Enum.TextXAlignment.Left
 		descLbl.Parent                 = frame
 
@@ -166,16 +233,34 @@ local function rebuildItems()
 			end
 			if #parts > 0 then
 				local bonusLbl = Instance.new("TextLabel")
-				bonusLbl.Size                   = UDim2.new(1, -80, 0, 18)
-				bonusLbl.Position               = UDim2.new(0, 76, 0, 60)
+				bonusLbl.Size                   = UDim2.new(1, -80, 0, 16)
+				bonusLbl.Position               = UDim2.new(0, 76, 0, 56)
 				bonusLbl.BackgroundTransparency = 1
 				bonusLbl.Text                   = "✦ " .. table.concat(parts, "  /  ")
 				bonusLbl.TextColor3             = Color3.fromRGB(100, 220, 150)
 				bonusLbl.Font                   = Enum.Font.Gotham
-				bonusLbl.TextSize               = 12
+				bonusLbl.TextSize               = 11
 				bonusLbl.TextXAlignment         = Enum.TextXAlignment.Left
 				bonusLbl.Parent                 = frame
 			end
+		end
+
+		-- プレビューテキスト（シューズのみ）
+		if isShoes and item.clickBonus then
+			local d2         = PlayerData.getData()
+			local baseClick  = Config.Click.BasePerClick
+			local rbBonus    = (d2.RebirthCount :: number) * Config.Rebirth.ClickBonusPerRebirth
+			local previewPow = baseClick + (item.clickBonus or 0) + rbBonus
+			local previewLbl = Instance.new("TextLabel")
+			previewLbl.Size                   = UDim2.new(1, -80, 0, 16)
+			previewLbl.Position               = UDim2.new(0, 76, 0, 74)
+			previewLbl.BackgroundTransparency = 1
+			previewLbl.Text                   = "装備すると: クリック +" .. math.floor(previewPow) .. "/tap になります"
+			previewLbl.TextColor3             = Color3.fromRGB(160, 220, 255)
+			previewLbl.Font                   = Enum.Font.Gotham
+			previewLbl.TextSize               = 11
+			previewLbl.TextXAlignment         = Enum.TextXAlignment.Left
+			previewLbl.Parent                 = frame
 		end
 
 		-- ボタン（右下）
@@ -184,7 +269,7 @@ local function rebuildItems()
 		btn.Position        = UDim2.new(1, -122, 1, -44)
 		btn.BorderSizePixel = 0
 		btn.Font            = Enum.Font.GothamBold
-		btn.TextSize        = 15
+		btn.TextSize        = 14
 		btn.TextColor3      = Color3.fromRGB(255, 255, 255)
 		btn.Parent          = frame
 
@@ -193,7 +278,7 @@ local function rebuildItems()
 		btnCorner.Parent       = btn
 
 		if isEquip then
-			btn.Text             = "装備中 ✓"
+			btn.Text             = "✓ 装備中"
 			btn.BackgroundColor3 = BTN_EQUIPPED
 			btn.Active           = false
 		elseif owned then
@@ -201,36 +286,42 @@ local function rebuildItems()
 			btn.BackgroundColor3 = BTN_EQUIP
 			btn.Active           = true
 		elseif canBuy then
-			btn.Text             = "購入"
+			btn.Text             = "🛒 購入！"
 			btn.BackgroundColor3 = BTN_BUY
 			btn.Active           = true
+			startBuyPulse(btn)
 		else
 			btn.Text             = "💰不足"
 			btn.BackgroundColor3 = BTN_NOFUND
-			btn.Active           = true  -- シェイクのためクリック可能にする
+			btn.Active           = true  -- シェイク・テキスト表示のため
 		end
 
-		local capturedId = id
+		local capturedId    = id
+		local capturedOwned = owned
+		local capturedEquip = isEquip
 		btn.MouseButton1Click:Connect(function()
 			if not btn.Active then return end
 
-			-- コイン不足の場合はシェイクして終了
 			local d2 = PlayerData.getData()
-			if not owned and not isEquip and d2.Coins < item.cost then
-				Effects.shakeFrame(mainPanel, 0.3)
+
+			-- コイン不足の場合
+			if not capturedOwned and not capturedEquip and d2.Coins < item.cost then
+				Effects.shakeFrame(frame, 0.3)
+				local shortage = item.cost - math.floor(d2.Coins)
+				showShortageText(frame, shortage)
 				return
 			end
 
 			local success = false
 			if isShoes then
-				if owned then
+				if capturedOwned then
 					success = PlayerData.equipShoes(capturedId)
 				else
 					success = PlayerData.buyShoes(capturedId)
 					if success then PlayerData.equipShoes(capturedId) end
 				end
 			else
-				if owned then
+				if capturedOwned then
 					success = PlayerData.equipTrail(capturedId)
 				else
 					success = PlayerData.buyTrail(capturedId)
@@ -241,6 +332,22 @@ local function rebuildItems()
 			if success then
 				SoundManager.playPurchase()
 				coinsLabel.Text = "💰 " .. math.floor(PlayerData.getData().Coins)
+
+				-- シューズ装備エフェクト
+				if isShoes then
+					local shoeColor = SHOE_COLORS[capturedId] or Color3.fromRGB(100, 180, 255)
+					local shoeData  = Config.Shoes[capturedId]
+					local shoeName  = if shoeData then shoeData.name else capturedId
+					local newPower  = PlayerData.getEffectiveClickPower()
+
+					Effects.shoeEquipParticle(shoeColor)
+					TrainingUI.bounceShoeLabel()
+					Effects.showNotification(
+						"👟 " .. shoeName .. " 装備！クリック力 → +" .. math.floor(newPower) .. "/tap",
+						2
+					)
+				end
+
 				rebuildItems()
 				MiniHUD.update()
 			end

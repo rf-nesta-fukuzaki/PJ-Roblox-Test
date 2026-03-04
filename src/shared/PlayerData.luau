@@ -6,17 +6,18 @@ local PlayerData = {}
 
 -- 内部ステータステーブル
 local data = {
-	JumpPower     = Config.InitialStats.JumpPower,
-	Speed         = Config.InitialStats.Speed,
-	PowerGauge    = Config.InitialStats.PowerGauge,
-	Coins         = Config.InitialStats.Coins,
-	RebirthCount  = Config.InitialStats.RebirthCount,
-	TotalDistance = Config.InitialStats.TotalDistance,
-	EquippedShoes = "starter",
-	EquippedTrail = "none",
-	MaxAltitude   = 0,
-	OwnedShoes    = { "starter" },
-	OwnedTrails   = { "none" },
+	JumpPower       = Config.InitialStats.JumpPower,
+	Speed           = Config.InitialStats.Speed,
+	PowerGauge      = Config.InitialStats.PowerGauge,
+	Coins           = Config.InitialStats.Coins,
+	RebirthCount    = Config.InitialStats.RebirthCount,
+	TotalDistance   = Config.InitialStats.TotalDistance,
+	EquippedShoes   = "starter",
+	EquippedTrail   = "none",
+	MaxAltitude     = 0,
+	OwnedShoes      = { "starter" },
+	OwnedTrails     = { "none" },
+	boostMultiplier = 1,
 }
 
 -- 現在のデータテーブルを返す（配列フィールドも含めてコピー）
@@ -78,13 +79,23 @@ end
 
 -- ===== 装備ボーナス計算 =====
 
--- クリック1回あたりのJumpPower成長量（シューズ＋リバースボーナス込み）
+-- クリック1回あたりのJumpPower成長量（シューズ＋リバースボーナス＋ブーストマルチプライヤー込み）
 function PlayerData.getEffectiveClickPower(): number
 	local shoes = Config.Shoes[data.EquippedShoes]
 	local clickBonus = shoes and shoes.clickBonus or 0
-	return Config.Click.BasePerClick
+	local base = Config.Click.BasePerClick
 		+ clickBonus
 		+ data.RebirthCount * Config.Rebirth.ClickBonusPerRebirth
+	return base * data.boostMultiplier
+end
+
+-- ブーストマルチプライヤーの設定・取得（RandomEventsから呼ばれる）
+function PlayerData.setBoostMultiplier(mult: number)
+	data.boostMultiplier = mult
+end
+
+function PlayerData.getBoostMultiplier(): number
+	return data.boostMultiplier
 end
 
 -- 走行距離1スタッドあたりのSpeed成長量（シューズ＋リバースボーナス込み）

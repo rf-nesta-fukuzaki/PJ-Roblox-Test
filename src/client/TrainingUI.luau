@@ -4,13 +4,9 @@ local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService      = game:GetService("TweenService")
 
-local PlayerData         = require(ReplicatedStorage.Shared.PlayerData)
-local Config             = require(ReplicatedStorage.Shared.Config)
-local MiniHUD            = require(script.Parent.MiniHUD)
-local MovementController = require(script.Parent.MovementController)
-local AltitudeTracker    = require(script.Parent.AltitudeTracker)
-local Effects            = require(script.Parent.Effects)
-local SoundManager       = require(script.Parent.SoundManager)
+local PlayerData = require(ReplicatedStorage.Shared.PlayerData)
+local Config     = require(ReplicatedStorage.Shared.Config)
+local Format     = require(ReplicatedStorage.Shared.Format)
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
@@ -18,139 +14,107 @@ local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
 local TrainingUI = {}
 
 -- ─────────────────────────────────────────
--- ボタン定義
--- ─────────────────────────────────────────
-local BUTTON_DEF = {
-	statName    = "JumpPower",
-	valuePrefix = "ジャンプ力",
-	color       = Color3.fromRGB(52, 152, 219),
-	darkColor   = Color3.fromRGB(31,  97, 141),
-}
-
--- ─────────────────────────────────────────
 -- 内部参照
 -- ─────────────────────────────────────────
-local jumpBtn         = nil :: TextButton?
-local jumpValueLabel  = nil :: TextLabel?
-local shoesLabel      = nil :: TextLabel?
-local totalPowerLabel = nil :: TextLabel?
-local stageLabel      = nil :: TextLabel?
-local evolutionNotice = nil :: TextLabel?
-local trainingScreenGui = nil :: ScreenGui?
+local screenGui        = nil :: ScreenGui?
+local totalPowerLabel  = nil :: TextLabel?
+local stageLabel       = nil :: TextLabel?
+local evolutionNotice  = nil :: TextLabel?
 
-local noticeVersion = 0
-
--- ─────────────────────────────────────────
--- コンボ追跡
--- ─────────────────────────────────────────
-local clickTimes      = {}
-local COMBO_WINDOW    = 1.0
-local COMBO_THRESHOLD = 5
-
-local function recordClickCombo(): number
-	local now    = tick()
-	local cutoff = now - COMBO_WINDOW
-	table.insert(clickTimes, now)
-	while clickTimes[1] and clickTimes[1] < cutoff do
-		table.remove(clickTimes, 1)
-	end
-	return #clickTimes
-end
+local statusBarLabels = {} :: { [string]: TextLabel }
+local noticeVersion   = 0
+local gaugeGold       = false
+local gaugePulseScale = nil :: UIScale?
 
 -- ─────────────────────────────────────────
--- ヘルパー関数
+-- PowerGaugeパルスアニメ
 -- ─────────────────────────────────────────
 
-local function updateDisplay()
-	local d = PlayerData.getData()
-
-	totalPowerLabel.Text = "総合パワー: " .. math.floor(d.JumpPower) .. " / パワー: " .. math.floor(d.PowerGauge)
-	stageLabel.Text      = "進化段階: Stage " .. PlayerData.getEvolutionStage()
-
-	local cp = PlayerData.getEffectiveClickPower()
-	if jumpBtn then
-		jumpBtn.Text = "💪 ジャンプ力\nトレーニング\n(+" .. cp .. "/click)"
+local function startGaugePulse()
+	local lbl = statusBarLabels.gauge
+	if not lbl then return end
+	if not gaugePulseScale then
+		local sc  = Instance.new("UIScale")
+		sc.Scale  = 1
+		sc.Parent = lbl
+		gaugePulseScale = sc
 	end
-	if jumpValueLabel then
-		jumpValueLabel.Text = BUTTON_DEF.valuePrefix .. ": " .. math.floor(d.JumpPower)
-	end
-	if shoesLabel then
-		local shoes = Config.Shoes[d.EquippedShoes]
-		local name  = if shoes then shoes.name else "なし"
-		shoesLabel.Text = "👟 装備: " .. name
-	end
-
-	MiniHUD.update()
-	MovementController.update()
-end
-
-local function playClickAnimation(button: TextButton)
-	local uiScale = button:FindFirstChildOfClass("UIScale")
-	if not uiScale then
-		uiScale        = Instance.new("UIScale")
-		uiScale.Scale  = 1
-		uiScale.Parent = button
-	end
-	TweenService:Create(
-		uiScale,
-		TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{ Scale = 1.13 }
-	):Play()
-	task.delay(0.07, function()
-		TweenService:Create(
-			uiScale,
-			TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			{ Scale = 1.0 }
-		):Play()
+	local sc = gaugePulseScale
+	task.spawn(function()
+		while gaugeGold and statusBarLabels.gauge do
+			TweenService:Create(sc, TweenInfo.new(0.5, Enum.EasingStyle.Quad), { Scale = 1.1 }):Play()
+			task.wait(0.5)
+			TweenService:Create(sc, TweenInfo.new(0.5, Enum.EasingStyle.Quad), { Scale = 1.0 }):Play()
+			task.wait(0.5)
+		end
+		if sc then sc.Scale = 1 end
 	end)
 end
 
-local function popValueLabel()
-	if not jumpValueLabel then return end
-	local sc = jumpValueLabel:FindFirstChildOfClass("UIScale")
+-- ─────────────────────────────────────────
+-- 公開API
+-- ─────────────────────────────────────────
+
+function TrainingUI.updateDisplay()
+	local d  = PlayerData.getData()
+	local cp = PlayerData.getEffectiveClickPower()
+
+	if totalPowerLabel then
+		totalPowerLabel.Text = "ジャンプ力: " .. Format.commaNumber(d.JumpPower)
+			.. " / パワー: " .. Format.commaNumber(d.PowerGauge)
+	end
+	if stageLabel then
+		stageLabel.Text = "Stage " .. PlayerData.getEvolutionStage()
+	end
+
+	-- ステータスバーの各項目
+	local shoes     = Config.Shoes[d.EquippedShoes]
+	local shoesName = if shoes then shoes.name else "なし"
+
+	if statusBarLabels.shoes then
+		statusBarLabels.shoes.Text = "👟" .. shoesName
+	end
+	if statusBarLabels.click then
+		statusBarLabels.click.Text = "💪+" .. math.floor(cp) .. "/tap"
+	end
+	if statusBarLabels.gauge then
+		local gauge    = d.PowerGauge
+		local isGold   = gauge >= Config.Rebirth.MinPowerGauge
+		statusBarLabels.gauge.Text      = "⚡" .. Format.commaNumber(gauge)
+		statusBarLabels.gauge.TextColor3 = if isGold
+			then Color3.fromRGB(255, 215, 0)
+			else Color3.fromRGB(150, 220, 255)
+		if isGold and not gaugeGold then
+			gaugeGold = true
+			startGaugePulse()
+		elseif not isGold then
+			gaugeGold = false
+		end
+	end
+	if statusBarLabels.coins then
+		statusBarLabels.coins.Text = "💰" .. Format.commaNumber(d.Coins)
+	end
+end
+
+-- シューズ名部分のバウンスアニメ（ShopUI から呼ぶ）
+function TrainingUI.bounceShoeLabel()
+	local lbl = statusBarLabels.shoes
+	if not lbl then return end
+	local sc = lbl:FindFirstChildOfClass("UIScale")
 	if not sc then
 		sc        = Instance.new("UIScale")
 		sc.Scale  = 1
-		sc.Parent = jumpValueLabel
+		sc.Parent = lbl
 	end
-	TweenService:Create(sc, TweenInfo.new(0.05, Enum.EasingStyle.Quad), { Scale = 1.35 }):Play()
-	task.delay(0.05, function()
-		TweenService:Create(sc, TweenInfo.new(0.15, Enum.EasingStyle.Quad), { Scale = 1.0 }):Play()
+	TweenService:Create(sc, TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1.5 }):Play()
+	task.delay(0.1, function()
+		TweenService:Create(sc, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Scale = 1.0 }):Play()
 	end)
 end
 
-local function showDamageNumber(clickPower: number)
-	local sg = trainingScreenGui
-	if not sg or not jumpBtn then return end
+function TrainingUI.showEvolutionNotice(stage: number)
+	if not evolutionNotice then return end
 
-	local absPos  = jumpBtn.AbsolutePosition
-	local absSize = jumpBtn.AbsoluteSize
-	local startX  = absPos.X + absSize.X / 2 + math.random(-30, 30)
-	local startY  = absPos.Y + 20
-
-	local lbl = Instance.new("TextLabel")
-	lbl.AnchorPoint            = Vector2.new(0.5, 1)
-	lbl.Size                   = UDim2.new(0, 80, 0, 28)
-	lbl.Position               = UDim2.new(0, startX, 0, startY)
-	lbl.BackgroundTransparency = 1
-	lbl.Text                   = "+" .. clickPower
-	lbl.TextColor3             = Color3.fromRGB(100, 220, 255)
-	lbl.Font                   = Enum.Font.GothamBold
-	lbl.TextSize               = 24
-	lbl.TextTransparency       = 0
-	lbl.ZIndex                 = 30
-	lbl.Parent                 = sg
-
-	TweenService:Create(
-		lbl,
-		TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{ Position = UDim2.new(0, startX, 0, startY - 60), TextTransparency = 1 }
-	):Play()
-
-	task.delay(0.7, function() lbl:Destroy() end)
-end
-
-local function showEvolutionNotice(stage: number)
 	noticeVersion += 1
 	local myVersion = noticeVersion
 
@@ -177,149 +141,108 @@ end
 -- ─────────────────────────────────────────
 
 function TrainingUI.init()
-	local prevStage = PlayerData.getEvolutionStage()
+	-- ScreenGui
+	local sg = Instance.new("ScreenGui")
+	sg.Name         = "TrainingUI"
+	sg.ResetOnSpawn = false
+	sg.Parent       = PlayerGui
+	screenGui = sg
 
-	-- ScreenGui ------------------------------------------------
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name         = "TrainingUI"
-	screenGui.ResetOnSpawn = false
-	screenGui.Parent       = PlayerGui
-	trainingScreenGui = screenGui
-
-	-- 上部ステータスバー ----------------------------------------
+	-- 上部ステータスバー
 	local topBar = Instance.new("Frame")
 	topBar.Name                   = "TopBar"
 	topBar.Size                   = UDim2.new(1, 0, 0, 64)
 	topBar.BackgroundColor3       = Color3.fromRGB(15, 15, 25)
 	topBar.BackgroundTransparency = 0.15
 	topBar.BorderSizePixel        = 0
-	topBar.Parent                 = screenGui
+	topBar.Parent                 = sg
 
 	totalPowerLabel = Instance.new("TextLabel")
-	totalPowerLabel.Size                   = UDim2.new(0.6, -16, 1, 0)
+	totalPowerLabel.Size                   = UDim2.new(0.65, -16, 1, 0)
 	totalPowerLabel.Position               = UDim2.new(0, 16, 0, 0)
 	totalPowerLabel.BackgroundTransparency = 1
-	totalPowerLabel.Text                   = "総合パワー: 0 / パワー: 0"
+	totalPowerLabel.Text                   = "ジャンプ力: 0 / パワー: 0"
 	totalPowerLabel.TextColor3             = Color3.fromRGB(255, 255, 255)
 	totalPowerLabel.Font                   = Enum.Font.GothamBold
-	totalPowerLabel.TextSize               = 22
+	totalPowerLabel.TextSize               = 20
 	totalPowerLabel.TextXAlignment         = Enum.TextXAlignment.Left
 	totalPowerLabel.Parent                 = topBar
 
 	stageLabel = Instance.new("TextLabel")
-	stageLabel.Size                   = UDim2.new(0.4, -16, 1, 0)
-	stageLabel.Position               = UDim2.new(0.6, 0, 0, 0)
+	stageLabel.Size                   = UDim2.new(0.35, -16, 1, 0)
+	stageLabel.Position               = UDim2.new(0.65, 0, 0, 0)
 	stageLabel.BackgroundTransparency = 1
-	stageLabel.Text                   = "進化段階: Stage 0"
+	stageLabel.Text                   = "Stage 0"
 	stageLabel.TextColor3             = Color3.fromRGB(255, 220, 50)
 	stageLabel.Font                   = Enum.Font.GothamBold
 	stageLabel.TextSize               = 22
 	stageLabel.TextXAlignment         = Enum.TextXAlignment.Right
 	stageLabel.Parent                 = topBar
 
-	-- フローティングジャンプボタン（右下固定・常時表示）----------
-	local def = BUTTON_DEF
+	-- 下部ステータスバー（画面下部中央）
+	local bottomBar = Instance.new("Frame")
+	bottomBar.Name                   = "StatusBar"
+	bottomBar.AnchorPoint            = Vector2.new(0.5, 1)
+	bottomBar.Size                   = UDim2.new(0, 520, 0, 50)
+	bottomBar.Position               = UDim2.new(0.5, 0, 1, -8)
+	bottomBar.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
+	bottomBar.BackgroundTransparency = 0.3
+	bottomBar.BorderSizePixel        = 0
+	bottomBar.Parent                 = sg
 
-	local container = Instance.new("Frame")
-	container.Name                   = "FloatingButtonContainer"
-	container.AnchorPoint            = Vector2.new(1, 1)
-	container.Size                   = UDim2.new(0, 180, 0, 218)
-	container.Position               = UDim2.new(1, -20, 1, -20)
-	container.BackgroundTransparency = 1
-	container.Parent                 = screenGui
+	local barCorner = Instance.new("UICorner")
+	barCorner.CornerRadius = UDim.new(0, 12)
+	barCorner.Parent       = bottomBar
 
-	local btn = Instance.new("TextButton")
-	btn.Name             = def.statName .. "Button"
-	btn.Size             = UDim2.new(1, 0, 0, 160)
-	btn.BackgroundColor3 = def.color
-	btn.BorderSizePixel  = 0
-	btn.Text             = "💪 ジャンプ力\nトレーニング\n(+3/click)"
-	btn.TextColor3       = Color3.fromRGB(255, 255, 255)
-	btn.Font             = Enum.Font.GothamBold
-	btn.TextSize         = 20
-	btn.TextWrapped      = true
-	btn.AutoButtonColor  = false
-	btn.Parent           = container
-	jumpBtn = btn
+	local barList = Instance.new("UIListLayout")
+	barList.FillDirection       = Enum.FillDirection.Horizontal
+	barList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	barList.VerticalAlignment   = Enum.VerticalAlignment.Center
+	barList.Padding             = UDim.new(0, 4)
+	barList.Parent              = bottomBar
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 20)
-	corner.Parent       = btn
+	local barPad = Instance.new("UIPadding")
+	barPad.PaddingLeft  = UDim.new(0, 12)
+	barPad.PaddingRight = UDim.new(0, 12)
+	barPad.Parent       = bottomBar
 
-	local stroke = Instance.new("UIStroke")
-	stroke.Color     = def.darkColor
-	stroke.Thickness = 4
-	stroke.Parent    = btn
+	-- アイテム定義と区切り
+	local barDefs = {
+		{ key = "shoes", text = "👟スターターシューズ", color = Color3.fromRGB(180, 220, 255), w = 155 },
+		{ sep = true },
+		{ key = "click", text = "💪+5/tap",             color = Color3.fromRGB(120, 255, 160), w = 90  },
+		{ sep = true },
+		{ key = "gauge", text = "⚡0",                  color = Color3.fromRGB(150, 220, 255), w = 110 },
+		{ sep = true },
+		{ key = "coins", text = "💰0",                  color = Color3.fromRGB(255, 215, 0),   w = 90  },
+	}
 
-	-- 現在値ラベル
-	local valueLabel = Instance.new("TextLabel")
-	valueLabel.Name                   = def.statName .. "Value"
-	valueLabel.Size                   = UDim2.new(1, 0, 0, 28)
-	valueLabel.Position               = UDim2.new(0, 0, 0, 168)
-	valueLabel.BackgroundTransparency = 1
-	valueLabel.Text                   = def.valuePrefix .. ": 0"
-	valueLabel.TextColor3             = Color3.fromRGB(210, 210, 210)
-	valueLabel.Font                   = Enum.Font.GothamBold
-	valueLabel.TextSize               = 18
-	valueLabel.Parent                 = container
-	jumpValueLabel = valueLabel
-
-	-- 装備シューズ表示ラベル
-	local shoesLbl = Instance.new("TextLabel")
-	shoesLbl.Name                   = "ShoesLabel"
-	shoesLbl.Size                   = UDim2.new(1, 0, 0, 18)
-	shoesLbl.Position               = UDim2.new(0, 0, 0, 198)
-	shoesLbl.BackgroundTransparency = 1
-	shoesLbl.Text                   = "👟 装備: スターターシューズ"
-	shoesLbl.TextColor3             = Color3.fromRGB(160, 210, 255)
-	shoesLbl.Font                   = Enum.Font.Gotham
-	shoesLbl.TextSize               = 13
-	shoesLbl.Parent                 = container
-	shoesLabel = shoesLbl
-
-	-- クリック処理
-	btn.MouseButton1Click:Connect(function()
-		playClickAnimation(btn)
-		popValueLabel()
-		Effects.clickBurst(def.color)
-		SoundManager.playClick()
-
-		local clickPower = PlayerData.getEffectiveClickPower()
-		PlayerData.addPower("JumpPower", clickPower)
-		PlayerData.addPower("PowerGauge", clickPower * 0.5)
-		showDamageNumber(clickPower)
-
-		-- コンボチェック
-		local comboCount = recordClickCombo()
-		if comboCount >= COMBO_THRESHOLD then
-			Effects.comboText(comboCount)
-			SoundManager.playCombo()
+	for _, def in ipairs(barDefs) do
+		if def.sep then
+			local sep = Instance.new("TextLabel")
+			sep.BackgroundTransparency = 1
+			sep.Text       = "|"
+			sep.TextColor3 = Color3.fromRGB(80, 80, 80)
+			sep.Font       = Enum.Font.Gotham
+			sep.TextSize   = 16
+			sep.Size       = UDim2.new(0, 10, 1, 0)
+			sep.Parent     = bottomBar
+		else
+			local lbl = Instance.new("TextLabel")
+			lbl.BackgroundTransparency = 1
+			lbl.Text                   = def.text
+			lbl.TextColor3             = def.color
+			lbl.Font                   = Enum.Font.GothamBold
+			lbl.TextSize               = 15
+			lbl.TextXAlignment         = Enum.TextXAlignment.Center
+			lbl.TextTruncate           = Enum.TextTruncate.AtEnd
+			lbl.Size                   = UDim2.new(0, def.w, 1, 0)
+			lbl.Parent                 = bottomBar
+			statusBarLabels[def.key]   = lbl
 		end
+	end
 
-		-- 進化チェック
-		local newStage = PlayerData.getEvolutionStage()
-		if newStage > prevStage then
-			prevStage = newStage
-			showEvolutionNotice(newStage)
-			Effects.evolutionFlash(newStage)
-			local char = LocalPlayer.Character
-			if char then
-				Effects.evolutionBurst(char)
-			end
-			SoundManager.playEvolution()
-		end
-
-		updateDisplay()
-	end)
-
-	btn.MouseEnter:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = def.darkColor }):Play()
-	end)
-	btn.MouseLeave:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = def.color }):Play()
-	end)
-
-	-- 進化演出テキスト（画面中央・ZIndex最前面）---------------
+	-- 進化演出テキスト（画面中央・ZIndex最前面）
 	evolutionNotice = Instance.new("TextLabel")
 	evolutionNotice.Name                   = "EvolutionNotice"
 	evolutionNotice.AnchorPoint            = Vector2.new(0.5, 0.5)
@@ -333,18 +256,13 @@ function TrainingUI.init()
 	evolutionNotice.TextSize               = 36
 	evolutionNotice.Visible                = false
 	evolutionNotice.ZIndex                 = 10
-	evolutionNotice.Parent                 = screenGui
+	evolutionNotice.Parent                 = sg
 
 	local noticeCorner = Instance.new("UICorner")
 	noticeCorner.CornerRadius = UDim.new(0, 14)
 	noticeCorner.Parent       = evolutionNotice
 
-	updateDisplay()
-end
-
--- リセット後にprevStageをリセットする（外部から呼ぶ用）
-function TrainingUI.onReset()
-	-- prevStage はローカルスコープだが updateDisplay で再計算されるので問題なし
+	TrainingUI.updateDisplay()
 end
 
 return TrainingUI

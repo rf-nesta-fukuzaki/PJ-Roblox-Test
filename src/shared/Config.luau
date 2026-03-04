@@ -16,7 +16,7 @@ Config.InitialStats = {
 
 -- ===== クリック育成（ジャンプ力）=====
 Config.Click = {
-	BasePerClick = 3,
+	BasePerClick = 5,
 }
 
 -- ===== 走行距離育成（スピード）=====
@@ -40,14 +40,14 @@ Config.Speed = {
 }
 
 -- ===== 進化段階（JumpPower基準）=====
-Config.EvolutionThresholds = { 50, 200, 800, 3000, 15000 }
+Config.EvolutionThresholds = { 100, 1000, 10000, 100000, 1000000 }
 
 -- ===== リバース =====
 Config.Rebirth = {
-	CoinsPerPower          = 0.1,
-	ClickBonusPerRebirth   = 0.5,
-	SpeedBonusPerRebirth   = 0.02,
-	MinPowerGauge          = 100,
+	CoinsPerPower          = 0.000001,
+	ClickBonusPerRebirth   = 5,
+	SpeedBonusPerRebirth   = 0.5,
+	MinPowerGauge          = 1000000000,  -- 10億
 }
 
 -- ===== ショップ（シューズ）=====
@@ -61,37 +61,37 @@ Config.Shoes = {
 	},
 	runner = {
 		name        = "🏃 ランナーシューズ",
-		cost        = 50,
-		clickBonus  = 1,
+		cost        = 10,
+		clickBonus  = 2,
 		runBonus    = 0.05,
 		description = "走るのが少し楽しくなる。",
 	},
 	springs = {
 		name        = "🦘 スプリングシューズ",
-		cost        = 200,
-		clickBonus  = 3,
-		runBonus    = 0.1,
+		cost        = 100,
+		clickBonus  = 8,
+		runBonus    = 0.2,
 		description = "バネの力でジャンプ力UP！",
 	},
 	rocket = {
 		name        = "🚀 ロケットシューズ",
-		cost        = 1000,
-		clickBonus  = 8,
-		runBonus    = 0.3,
+		cost        = 500,
+		clickBonus  = 25,
+		runBonus    = 0.5,
 		description = "宇宙を目指す者のための一足。",
 	},
 	legendary = {
 		name        = "👑 レジェンダリーシューズ",
-		cost        = 5000,
-		clickBonus  = 20,
-		runBonus    = 1.0,
+		cost        = 2000,
+		clickBonus  = 80,
+		runBonus    = 2.0,
 		description = "伝説の靴。全てが加速する。",
 	},
 	galaxy = {
 		name        = "🌌 ギャラクシーシューズ",
-		cost        = 25000,
-		clickBonus  = 50,
-		runBonus    = 3.0,
+		cost        = 10000,
+		clickBonus  = 250,
+		runBonus    = 8.0,
 		description = "銀河を駆ける者だけが履ける。",
 	},
 }
@@ -108,25 +108,18 @@ Config.Trails = {
 }
 Config.TrailsOrder = { "none", "fire", "ice", "star", "rainbow", "galaxy" }
 
--- ===== トレーニングゾーンの範囲（参照用に保持）=====
-Config.TrainingZoneBounds = {
-	MinX = -30, MaxX = 30,
-	MinZ =  20, MaxZ = 60,
-	MinY =  -5, MaxY = 20,
-}
-
 -- ===== リバースゾーンの範囲 =====
 Config.RebirthZoneBounds = {
-	MinX = -50, MaxX = -30,
-	MinZ = -12, MaxZ = 12,
+	MinX = -20, MaxX = 20,
+	MinZ = -80, MaxZ = -50,
 	MinY =  -5, MaxY = 20,
 }
 
 -- ===== ショップゾーンの範囲 =====
 Config.ShopZoneBounds = {
-	MinX =  40, MaxX =  70,
-	MinZ = -12, MaxZ =  12,
-	MinY =  -5, MaxY =  20,
+	MinX = -20, MaxX = 20,
+	MinZ =  50, MaxZ = 80,
+	MinY =  -5, MaxY = 20,
 }
 
 return Config

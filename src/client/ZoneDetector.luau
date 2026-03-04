@@ -4,27 +4,21 @@ local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService        = game:GetService("RunService")
 
-local Config      = require(ReplicatedStorage.Shared.Config)
-local TrainingUI  = require(script.Parent.TrainingUI)
-local RebirthUI   = require(script.Parent.RebirthUI)
-local ShopUI      = require(script.Parent.ShopUI)
+local Config    = require(ReplicatedStorage.Shared.Config)
+local RebirthUI = require(script.Parent.RebirthUI)
+local ShopUI    = require(script.Parent.ShopUI)
 
 local LocalPlayer = Players.LocalPlayer
 
 local ZoneDetector = {}
 
-local INTERVAL = 0.2  -- チェック間隔（秒）
+local INTERVAL = 0.2
 
 -- ─────────────────────────────────────────
--- ゾーン定義
+-- ゾーン定義（TrainingZoneはボタン常時表示化により削除）
 -- ─────────────────────────────────────────
 
 local ZONES = {
-	{
-		bounds  = Config.TrainingZoneBounds,
-		onEnter = function() TrainingUI.setButtonsVisible(true)  end,
-		onLeave = function() TrainingUI.setButtonsVisible(false) end,
-	},
 	{
 		bounds  = Config.RebirthZoneBounds,
 		onEnter = function() RebirthUI.show() end,
@@ -52,14 +46,11 @@ end
 -- ─────────────────────────────────────────
 
 function ZoneDetector.init()
-	-- 各ゾーンの「現在いるか」フラグ
 	local inZone = {}
 	for i = 1, #ZONES do
 		inZone[i] = false
 	end
 
-	-- 初期状態: 全UIを非表示
-	TrainingUI.setButtonsVisible(false)
 	RebirthUI.hide()
 	ShopUI.hide()
 

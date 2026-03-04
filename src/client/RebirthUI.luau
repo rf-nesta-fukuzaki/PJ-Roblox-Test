@@ -7,9 +7,9 @@ local TweenService      = game:GetService("TweenService")
 local PlayerData         = require(ReplicatedStorage.Shared.PlayerData)
 local Config             = require(ReplicatedStorage.Shared.Config)
 local MiniHUD            = require(script.Parent.MiniHUD)
-local TrainingUI         = require(script.Parent.TrainingUI)
 local SoundManager       = require(script.Parent.SoundManager)
 local MovementController = require(script.Parent.MovementController)
+local Effects            = require(script.Parent.Effects)
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
@@ -33,6 +33,12 @@ local rebirthBtn       = nil :: TextButton?
 local bonusLabel       = nil :: TextLabel?
 local flashFrame       = nil :: Frame?
 local resultLabel      = nil :: TextLabel?
+
+-- ─────────────────────────────────────────
+-- スライドアニメーション定数
+-- ─────────────────────────────────────────
+local PANEL_CENTER  = UDim2.new(0.5, 0, 0.5, 0)
+local PANEL_OFFBOT  = UDim2.new(0.5, 0, 1.5, 0)
 
 -- ─────────────────────────────────────────
 -- ヘルパー
@@ -84,16 +90,21 @@ local function playRebirthEffect(coins: number)
 		{ BackgroundTransparency = 1 }
 	):Play()
 
-	-- 結果テキスト表示
-	resultLabel.Text            = "🔄 リバース完了！ 0コイン獲得！"
+	-- パネルシェイク
+	Effects.shakeFrame(mainPanel, 0.5)
+
+	-- 紙吹雪
+	Effects.rebirthConfetti()
+
+	-- 結果テキスト
+	resultLabel.Text             = "🔄 リバース完了！ 0コイン獲得！"
 	resultLabel.TextTransparency = 0
-	resultLabel.Visible         = true
+	resultLabel.Visible          = true
 
 	countUpAnim(0, coins, 1.2, function(n)
 		resultLabel.Text = "🔄 リバース完了！ " .. n .. "コイン獲得！"
 	end)
 
-	-- 2秒後にフェードアウト
 	task.delay(1.8, function()
 		TweenService:Create(
 			resultLabel,
@@ -107,20 +118,31 @@ local function playRebirthEffect(coins: number)
 end
 
 -- ─────────────────────────────────────────
--- 公開API
+-- 公開API（スライドアニメーション付き）
 -- ─────────────────────────────────────────
 
 function RebirthUI.show()
-	if mainPanel then
-		refreshPanel()
-		mainPanel.Visible = true
-	end
+	if not mainPanel then return end
+	refreshPanel()
+	mainPanel.Position = PANEL_OFFBOT
+	mainPanel.Visible  = true
+	TweenService:Create(
+		mainPanel,
+		TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{ Position = PANEL_CENTER }
+	):Play()
 end
 
 function RebirthUI.hide()
-	if mainPanel then
-		mainPanel.Visible = false
-	end
+	if not mainPanel then return end
+	TweenService:Create(
+		mainPanel,
+		TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+		{ Position = PANEL_OFFBOT }
+	):Play()
+	task.delay(0.2, function()
+		if mainPanel then mainPanel.Visible = false end
+	end)
 end
 
 -- ─────────────────────────────────────────
@@ -144,12 +166,12 @@ function RebirthUI.init()
 	ff.Parent                 = screenGui
 	flashFrame = ff
 
-	-- メインパネル（初期非表示）
+	-- メインパネル（初期非表示・下外）
 	local panel = Instance.new("Frame")
 	panel.Name                   = "MainPanel"
 	panel.AnchorPoint            = Vector2.new(0.5, 0.5)
-	panel.Size                   = UDim2.new(0, 500, 0, 400)
-	panel.Position               = UDim2.new(0.5, 0, 0.5, 0)
+	panel.Size                   = UDim2.new(0, 500, 0, 380)
+	panel.Position               = PANEL_OFFBOT
 	panel.BackgroundColor3       = Color3.fromRGB(15, 15, 30)
 	panel.BackgroundTransparency = 0.12
 	panel.BorderSizePixel        = 0
@@ -265,36 +287,13 @@ function RebirthUI.init()
 		refreshPanel()
 		MiniHUD.update()
 		MovementController.update()
-		-- リーダーボードにリバース回数を送信（最高高度はリセットされるので0）
+
 		if updateLeaderboardRE then
 			updateLeaderboardRE:FireServer(0, result.newRebirthCount)
 		end
 	end)
 
-	-- 閉じるボタン（右上・絶対配置）
-	local closeBtn = Instance.new("TextButton")
-	closeBtn.Name             = "CloseButton"
-	closeBtn.AnchorPoint      = Vector2.new(1, 0)
-	closeBtn.Size             = UDim2.new(0, 36, 0, 36)
-	closeBtn.Position         = UDim2.new(1, -8, 0, 8)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
-	closeBtn.BorderSizePixel  = 0
-	closeBtn.Text             = "✕"
-	closeBtn.TextColor3       = Color3.fromRGB(255, 255, 255)
-	closeBtn.Font             = Enum.Font.GothamBold
-	closeBtn.TextSize         = 18
-	closeBtn.ZIndex           = 12
-	closeBtn.Parent           = panel
-
-	local closeCorner = Instance.new("UICorner")
-	closeCorner.CornerRadius = UDim.new(0, 8)
-	closeCorner.Parent       = closeBtn
-
-	closeBtn.MouseButton1Click:Connect(function()
-		RebirthUI.hide()
-	end)
-
-	-- リバース完了テキスト（mainPanelの外・画面中央）
+	-- リバース完了テキスト（画面中央）
 	local resLbl = Instance.new("TextLabel")
 	resLbl.Name                   = "ResultLabel"
 	resLbl.AnchorPoint            = Vector2.new(0.5, 0.5)

@@ -18,7 +18,7 @@ local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
 local TrainingUI = {}
 
 -- ─────────────────────────────────────────
--- ボタン定義（ジャンプ力のみ）
+-- ボタン定義
 -- ─────────────────────────────────────────
 local BUTTON_DEF = {
 	statName    = "JumpPower",
@@ -38,10 +38,24 @@ local stageLabel      = nil :: TextLabel?
 local evolutionNotice = nil :: TextLabel?
 local trainingScreenGui = nil :: ScreenGui?
 
-local buttonArea = nil :: Frame?
-local resetBtn   = nil :: TextButton?
-
 local noticeVersion = 0
+
+-- ─────────────────────────────────────────
+-- コンボ追跡
+-- ─────────────────────────────────────────
+local clickTimes      = {}
+local COMBO_WINDOW    = 1.0
+local COMBO_THRESHOLD = 5
+
+local function recordClickCombo(): number
+	local now    = tick()
+	local cutoff = now - COMBO_WINDOW
+	table.insert(clickTimes, now)
+	while clickTimes[1] and clickTimes[1] < cutoff do
+		table.remove(clickTimes, 1)
+	end
+	return #clickTimes
+end
 
 -- ─────────────────────────────────────────
 -- ヘルパー関数
@@ -91,7 +105,6 @@ local function playClickAnimation(button: TextButton)
 	end)
 end
 
--- 現在値のポップアニメーション
 local function popValueLabel()
 	if not jumpValueLabel then return end
 	local sc = jumpValueLabel:FindFirstChildOfClass("UIScale")
@@ -106,7 +119,6 @@ local function popValueLabel()
 	end)
 end
 
--- ダメージ数字演出（「+N」がボタン上部から浮き上がりフェードアウト）
 local function showDamageNumber(clickPower: number)
 	local sg = trainingScreenGui
 	if not sg or not jumpBtn then return end
@@ -161,15 +173,6 @@ local function showEvolutionNotice(stage: number)
 end
 
 -- ─────────────────────────────────────────
--- 公開API
--- ─────────────────────────────────────────
-
-function TrainingUI.setButtonsVisible(visible: boolean)
-	if buttonArea then buttonArea.Visible = visible end
-	if resetBtn   then resetBtn.Visible   = visible end
-end
-
--- ─────────────────────────────────────────
 -- UI構築
 -- ─────────────────────────────────────────
 
@@ -214,48 +217,33 @@ function TrainingUI.init()
 	stageLabel.TextXAlignment         = Enum.TextXAlignment.Right
 	stageLabel.Parent                 = topBar
 
-	-- ボタンエリア（画面下部中央・初期非表示）------------------
-	buttonArea = Instance.new("Frame")
-	buttonArea.Name                   = "ButtonArea"
-	buttonArea.AnchorPoint            = Vector2.new(0.5, 1)
-	buttonArea.Size                   = UDim2.new(0, 260, 0, 264)
-	buttonArea.Position               = UDim2.new(0.5, 0, 1, -72)
-	buttonArea.BackgroundTransparency = 1
-	buttonArea.Visible                = false
-	buttonArea.Parent                 = screenGui
-
-	local listLayout = Instance.new("UIListLayout")
-	listLayout.FillDirection       = Enum.FillDirection.Horizontal
-	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	listLayout.VerticalAlignment   = Enum.VerticalAlignment.Top
-	listLayout.Padding             = UDim.new(0, 20)
-	listLayout.Parent              = buttonArea
-
-	-- ジャンプ力ボタン生成 -------------------------------------------
+	-- フローティングジャンプボタン（右下固定・常時表示）----------
 	local def = BUTTON_DEF
 
 	local container = Instance.new("Frame")
-	container.Name                   = def.statName .. "Container"
-	container.Size                   = UDim2.new(0, 240, 0, 260)
+	container.Name                   = "FloatingButtonContainer"
+	container.AnchorPoint            = Vector2.new(1, 1)
+	container.Size                   = UDim2.new(0, 180, 0, 218)
+	container.Position               = UDim2.new(1, -20, 1, -20)
 	container.BackgroundTransparency = 1
-	container.Parent                 = buttonArea
+	container.Parent                 = screenGui
 
 	local btn = Instance.new("TextButton")
 	btn.Name             = def.statName .. "Button"
-	btn.Size             = UDim2.new(1, 0, 0, 180)
+	btn.Size             = UDim2.new(1, 0, 0, 160)
 	btn.BackgroundColor3 = def.color
 	btn.BorderSizePixel  = 0
 	btn.Text             = "💪 ジャンプ力\nトレーニング\n(+3/click)"
 	btn.TextColor3       = Color3.fromRGB(255, 255, 255)
 	btn.Font             = Enum.Font.GothamBold
-	btn.TextSize         = 22
+	btn.TextSize         = 20
 	btn.TextWrapped      = true
 	btn.AutoButtonColor  = false
 	btn.Parent           = container
 	jumpBtn = btn
 
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 18)
+	corner.CornerRadius = UDim.new(0, 20)
 	corner.Parent       = btn
 
 	local stroke = Instance.new("UIStroke")
@@ -266,29 +254,30 @@ function TrainingUI.init()
 	-- 現在値ラベル
 	local valueLabel = Instance.new("TextLabel")
 	valueLabel.Name                   = def.statName .. "Value"
-	valueLabel.Size                   = UDim2.new(1, 0, 0, 34)
-	valueLabel.Position               = UDim2.new(0, 0, 0, 188)
+	valueLabel.Size                   = UDim2.new(1, 0, 0, 28)
+	valueLabel.Position               = UDim2.new(0, 0, 0, 168)
 	valueLabel.BackgroundTransparency = 1
 	valueLabel.Text                   = def.valuePrefix .. ": 0"
 	valueLabel.TextColor3             = Color3.fromRGB(210, 210, 210)
 	valueLabel.Font                   = Enum.Font.GothamBold
-	valueLabel.TextSize               = 22
+	valueLabel.TextSize               = 18
 	valueLabel.Parent                 = container
 	jumpValueLabel = valueLabel
 
 	-- 装備シューズ表示ラベル
 	local shoesLbl = Instance.new("TextLabel")
 	shoesLbl.Name                   = "ShoesLabel"
-	shoesLbl.Size                   = UDim2.new(1, 0, 0, 22)
-	shoesLbl.Position               = UDim2.new(0, 0, 0, 228)
+	shoesLbl.Size                   = UDim2.new(1, 0, 0, 18)
+	shoesLbl.Position               = UDim2.new(0, 0, 0, 198)
 	shoesLbl.BackgroundTransparency = 1
 	shoesLbl.Text                   = "👟 装備: スターターシューズ"
 	shoesLbl.TextColor3             = Color3.fromRGB(160, 210, 255)
 	shoesLbl.Font                   = Enum.Font.Gotham
-	shoesLbl.TextSize               = 14
+	shoesLbl.TextSize               = 13
 	shoesLbl.Parent                 = container
 	shoesLabel = shoesLbl
 
+	-- クリック処理
 	btn.MouseButton1Click:Connect(function()
 		playClickAnimation(btn)
 		popValueLabel()
@@ -300,10 +289,19 @@ function TrainingUI.init()
 		PlayerData.addPower("PowerGauge", clickPower * 0.5)
 		showDamageNumber(clickPower)
 
+		-- コンボチェック
+		local comboCount = recordClickCombo()
+		if comboCount >= COMBO_THRESHOLD then
+			Effects.comboText(comboCount)
+			SoundManager.playCombo()
+		end
+
+		-- 進化チェック
 		local newStage = PlayerData.getEvolutionStage()
 		if newStage > prevStage then
 			prevStage = newStage
 			showEvolutionNotice(newStage)
+			Effects.evolutionFlash(newStage)
 			local char = LocalPlayer.Character
 			if char then
 				Effects.evolutionBurst(char)
@@ -319,40 +317,6 @@ function TrainingUI.init()
 	end)
 	btn.MouseLeave:Connect(function()
 		TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = def.color }):Play()
-	end)
-
-	-- リセットボタン（ButtonAreaの直下・中央・初期非表示）------
-	resetBtn = Instance.new("TextButton")
-	resetBtn.Name             = "ResetButton"
-	resetBtn.AnchorPoint      = Vector2.new(0.5, 0)
-	resetBtn.Size             = UDim2.new(0, 100, 0, 36)
-	resetBtn.Position         = UDim2.new(0.5, 0, 1, -64)
-	resetBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-	resetBtn.BorderSizePixel  = 0
-	resetBtn.Text             = "🔄 リセット"
-	resetBtn.TextColor3       = Color3.fromRGB(200, 200, 200)
-	resetBtn.Font             = Enum.Font.GothamBold
-	resetBtn.TextSize         = 14
-	resetBtn.AutoButtonColor  = false
-	resetBtn.Visible          = false
-	resetBtn.ZIndex           = 5
-	resetBtn.Parent           = screenGui
-
-	local resetCorner = Instance.new("UICorner")
-	resetCorner.CornerRadius = UDim.new(0, 8)
-	resetCorner.Parent       = resetBtn
-
-	resetBtn.MouseButton1Click:Connect(function()
-		PlayerData.reset()
-		AltitudeTracker.resetMilestones()
-		prevStage = 0
-		updateDisplay()
-	end)
-	resetBtn.MouseEnter:Connect(function()
-		TweenService:Create(resetBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(55, 55, 55) }):Play()
-	end)
-	resetBtn.MouseLeave:Connect(function()
-		TweenService:Create(resetBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(80, 80, 80) }):Play()
 	end)
 
 	-- 進化演出テキスト（画面中央・ZIndex最前面）---------------
@@ -376,6 +340,11 @@ function TrainingUI.init()
 	noticeCorner.Parent       = evolutionNotice
 
 	updateDisplay()
+end
+
+-- リセット後にprevStageをリセットする（外部から呼ぶ用）
+function TrainingUI.onReset()
+	-- prevStage はローカルスコープだが updateDisplay で再計算されるので問題なし
 end
 
 return TrainingUI

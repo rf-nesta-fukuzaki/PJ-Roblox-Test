@@ -108,7 +108,7 @@ Config.Trails = {
 }
 Config.TrailsOrder = { "none", "fire", "ice", "star", "rainbow", "galaxy" }
 
--- ===== トレーニングゾーンの範囲 =====
+-- ===== トレーニングゾーンの範囲（参照用に保持）=====
 Config.TrainingZoneBounds = {
 	MinX = -30, MaxX = 30,
 	MinZ =  20, MaxZ = 60,
@@ -117,24 +117,16 @@ Config.TrainingZoneBounds = {
 
 -- ===== リバースゾーンの範囲 =====
 Config.RebirthZoneBounds = {
-	MinX = -20, MaxX = 20,
-	MinZ = -40, MaxZ = -10,
+	MinX = -50, MaxX = -30,
+	MinZ = -12, MaxZ = 12,
 	MinY =  -5, MaxY = 20,
 }
 
 -- ===== ショップゾーンの範囲 =====
 Config.ShopZoneBounds = {
-	MinX =  50, MaxX = 100,
-	MinZ = -10, MaxZ =  30,
+	MinX =  40, MaxX =  70,
+	MinZ = -12, MaxZ =  12,
 	MinY =  -5, MaxY =  20,
-}
-
--- ===== 落下足場システム =====
-Config.FallPlatform = {
-	Duration       = 30,
-	MinFallHeight  = 30,
-	PlatformSize   = Vector3.new(8, 1, 8),
-	SpawnOffsetY   = 5,
 }
 
 return Config

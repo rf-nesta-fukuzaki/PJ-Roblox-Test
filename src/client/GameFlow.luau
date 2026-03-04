@@ -13,8 +13,8 @@ function GameFlow.init()
 	-- ─────────────────────────────────────────
 	-- 全モジュールの初期化（依存関係に沿った順序）
 	-- ─────────────────────────────────────────
-	local Effects            = require(script.Parent.Effects)
 	local SoundManager       = require(script.Parent.SoundManager)
+	local Effects            = require(script.Parent.Effects)
 	local MiniHUD            = require(script.Parent.MiniHUD)
 	local TrainingUI         = require(script.Parent.TrainingUI)
 	local MovementController = require(script.Parent.MovementController)
@@ -24,8 +24,8 @@ function GameFlow.init()
 	local ZoneDetector       = require(script.Parent.ZoneDetector)
 	local AltitudeTracker    = require(script.Parent.AltitudeTracker)
 	local KillBrickHandler   = require(script.Parent.KillBrickHandler)
+	local PlatformPhaser     = require(script.Parent.PlatformPhaser)
 
-	Effects.initFallPlatformListener()
 	SoundManager.init()
 	MiniHUD.init()
 	TrainingUI.init()
@@ -36,9 +36,12 @@ function GameFlow.init()
 	ZoneDetector.init()
 	AltitudeTracker.init()
 	KillBrickHandler.init()
+	PlatformPhaser.init()
+
+	SoundManager.playBGM()
 
 	-- ─────────────────────────────────────────
-	-- ウェルカムメッセージ（初回スポーン時に3秒表示）
+	-- ウェルカムメッセージ（タイプライター演出）
 	-- ─────────────────────────────────────────
 	local sg = Instance.new("ScreenGui")
 	sg.Name         = "WelcomeScreen"
@@ -48,7 +51,7 @@ function GameFlow.init()
 	local bg = Instance.new("Frame")
 	bg.Name                   = "WelcomeBg"
 	bg.AnchorPoint            = Vector2.new(0.5, 0.5)
-	bg.Size                   = UDim2.new(0, 560, 0, 150)
+	bg.Size                   = UDim2.new(0, 580, 0, 150)
 	bg.Position               = UDim2.new(0.5, 0, 0.40, 0)
 	bg.BackgroundColor3       = Color3.fromRGB(10, 10, 20)
 	bg.BackgroundTransparency = 0.15
@@ -89,15 +92,24 @@ function GameFlow.init()
 	subLabel.Name                   = "Sub"
 	subLabel.Size                   = UDim2.new(1, 0, 0, 26)
 	subLabel.BackgroundTransparency = 1
-	subLabel.Text                   = "トレーニングで鍛えて、空の足場を目指そう！"
+	subLabel.Text                   = ""
 	subLabel.TextColor3             = Color3.fromRGB(220, 220, 220)
 	subLabel.Font                   = Enum.Font.Gotham
 	subLabel.TextSize               = 18
 	subLabel.ZIndex                 = 21
 	subLabel.Parent                 = bg
 
-	-- 3秒後にフェードアウト → 1秒後に削除
-	task.delay(3, function()
+	-- タイプライター演出
+	local SUB_TEXT = "トレーニングで鍛えて、空高く飛び立て！"
+	task.spawn(function()
+		for i = 1, #SUB_TEXT do
+			subLabel.Text = SUB_TEXT:sub(1, i)
+			task.wait(0.05)
+		end
+	end)
+
+	-- 3.5秒後にフェードアウト
+	task.delay(3.5, function()
 		local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 		TweenService:Create(bg,         tweenInfo, { BackgroundTransparency = 1 }):Play()
 		TweenService:Create(titleLabel, tweenInfo, { TextTransparency = 1 }):Play()

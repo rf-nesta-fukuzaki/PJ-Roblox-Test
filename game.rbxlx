@@ -306,18 +306,18 @@ gcLgc4RKxr21zq2UlJSM]]></BinaryString>
 		<Item class="Camera" referent="RBX99376b2455bd4323b8008cf949ca469e">
 			<Properties>
 				<CoordinateFrame name="CFrame">
-					<X>3.76400399</X>
-					<Y>14.6640062</Y>
-					<Z>23.2099133</Z>
-					<R00>0.991215587</R00>
-					<R01>-0.060576912</R01>
-					<R02>0.117567733</R02>
-					<R10>-0</R10>
-					<R11>0.888938546</R11>
-					<R12>0.458026618</R12>
-					<R20>-0.132256314</R20>
-					<R21>-0.454003125</R21>
-					<R22>0.881129682</R22>
+					<X>13.7141609</X>
+					<Y>13.9141188</Y>
+					<Z>20.3637753</Z>
+					<R00>0.879648328</R00>
+					<R01>-0.206708223</R01>
+					<R02>0.428358018</R02>
+					<R10>-1.49011612e-08</R10>
+					<R11>0.900621891</R11>
+					<R12>0.434603631</R12>
+					<R20>-0.47562474</R20>
+					<R21>-0.38229835</R21>
+					<R22>0.792230487</R22>
 				</CoordinateFrame>
 				<Ref name="CameraSubject">null</Ref>
 				<token name="CameraType">0</token>
@@ -841,7 +841,8 @@ gcLgc4RKxr21zq2UlJSM]]></BinaryString>
 			</Properties>
 			<Item class="LocalScript" referent="9">
 				<Properties>
-					<ProtectedString name="Source"><![CDATA[print("Hello world, from client!")
+					<ProtectedString name="Source"><![CDATA[local TrainingUI = require(script.TrainingUI)
+TrainingUI.init()
 ]]></ProtectedString>
 					<bool name="Disabled">false</bool>
 					<Content name="LinkedSource"><null></null></Content>
@@ -856,6 +857,290 @@ gcLgc4RKxr21zq2UlJSM]]></BinaryString>
 					<BinaryString name="Tags"></BinaryString>
 					<UniqueId name="UniqueId">06786fbfddfabcf409b841460000039d</UniqueId>
 				</Properties>
+				<Item class="ModuleScript" referent="RBXfc969f154b524f0caedbd6c32ae9dc8c">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- トレーニング画面のUI生成・管理
+
+local Players           = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService      = game:GetService("TweenService")
+
+local PlayerData = require(ReplicatedStorage.Shared.PlayerData)
+local Config     = require(ReplicatedStorage.Shared.Config)
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
+
+local TrainingUI = {}
+
+-- ─────────────────────────────────────────
+-- ボタン定義
+-- ─────────────────────────────────────────
+
+local BUTTON_DEFS = {
+	{
+		statName    = "DashPower",
+		label       = "🦵 脚力\nトレーニング",
+		valuePrefix = "脚力",
+		color       = Color3.fromRGB( 52, 152, 219),
+		darkColor   = Color3.fromRGB( 31,  97, 141),
+	},
+	{
+		statName    = "JumpPower",
+		label       = "⬆️ ジャンプ\nトレーニング",
+		valuePrefix = "ジャンプ力",
+		color       = Color3.fromRGB( 39, 174,  96),
+		darkColor   = Color3.fromRGB( 24, 106,  59),
+	},
+	{
+		statName    = "FlightPower",
+		label       = "🪽 飛行\nトレーニング",
+		valuePrefix = "飛行力",
+		color       = Color3.fromRGB(142,  68, 173),
+		darkColor   = Color3.fromRGB( 86,  41, 105),
+	},
+}
+
+-- ─────────────────────────────────────────
+-- 内部参照
+-- ─────────────────────────────────────────
+
+-- { label: TextLabel, prefix: string } のテーブルをstatName毎に保持
+local valueLabels      = {} :: { [string]: { label: TextLabel, prefix: string } }
+local totalPowerLabel  = nil :: TextLabel?
+local stageLabel       = nil :: TextLabel?
+local evolutionNotice  = nil :: TextLabel?
+
+-- 複数の進化通知が重なった場合に古いhide処理をキャンセルするバージョン管理
+local noticeVersion = 0
+
+-- ─────────────────────────────────────────
+-- ヘルパー関数
+-- ─────────────────────────────────────────
+
+local function updateDisplay()
+	local d     = PlayerData.getData()
+	local total = (d.DashPower :: number) + (d.JumpPower :: number) + (d.FlightPower :: number)
+
+	totalPowerLabel.Text = "総合パワー: " .. total
+	stageLabel.Text      = "進化段階: Stage " .. PlayerData.getEvolutionStage()
+
+	for statName, info in pairs(valueLabels) do
+		info.label.Text = info.prefix .. ": " .. (d[statName] :: number)
+	end
+end
+
+-- ボタンをぽんと大きくするアニメーション
+local function playClickAnimation(button: TextButton)
+	local uiScale = button:FindFirstChildOfClass("UIScale")
+	if not uiScale then
+		uiScale          = Instance.new("UIScale")
+		uiScale.Scale    = 1
+		uiScale.Parent   = button
+	end
+	TweenService:Create(
+		uiScale,
+		TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ Scale = 1.13 }
+	):Play()
+	task.delay(0.07, function()
+		TweenService:Create(
+			uiScale,
+			TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Scale = 1.0 }
+		):Play()
+	end)
+end
+
+-- 画面中央に進化演出を表示（2秒でフェードアウト）
+local function showEvolutionNotice(stage: number)
+	noticeVersion += 1
+	local myVersion = noticeVersion
+
+	evolutionNotice.Text                   = "⭐ 進化！ Stage " .. stage .. " ⭐"
+	evolutionNotice.TextTransparency       = 0
+	evolutionNotice.BackgroundTransparency = 0.15
+	evolutionNotice.Visible                = true
+
+	TweenService:Create(
+		evolutionNotice,
+		TweenInfo.new(2, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+		{ TextTransparency = 1, BackgroundTransparency = 1 }
+	):Play()
+
+	task.delay(2, function()
+		if noticeVersion == myVersion then
+			evolutionNotice.Visible = false
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────
+-- UI構築
+-- ─────────────────────────────────────────
+
+function TrainingUI.init()
+	local prevStage = PlayerData.getEvolutionStage()
+
+	-- ScreenGui ------------------------------------------------
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name         = "TrainingUI"
+	screenGui.ResetOnSpawn = false
+	screenGui.Parent       = PlayerGui
+
+	-- 上部ステータスバー ----------------------------------------
+	local topBar = Instance.new("Frame")
+	topBar.Name                   = "TopBar"
+	topBar.Size                   = UDim2.new(1, 0, 0, 64)
+	topBar.BackgroundColor3       = Color3.fromRGB(15, 15, 25)
+	topBar.BackgroundTransparency = 0.15
+	topBar.BorderSizePixel        = 0
+	topBar.Parent                 = screenGui
+
+	totalPowerLabel = Instance.new("TextLabel")
+	totalPowerLabel.Size              = UDim2.new(0.5, -16, 1, 0)
+	totalPowerLabel.Position          = UDim2.new(0, 16, 0, 0)
+	totalPowerLabel.BackgroundTransparency = 1
+	totalPowerLabel.Text              = "総合パワー: 0"
+	totalPowerLabel.TextColor3        = Color3.fromRGB(255, 255, 255)
+	totalPowerLabel.Font              = Enum.Font.GothamBold
+	totalPowerLabel.TextSize          = 24
+	totalPowerLabel.TextXAlignment    = Enum.TextXAlignment.Left
+	totalPowerLabel.Parent            = topBar
+
+	stageLabel = Instance.new("TextLabel")
+	stageLabel.Size              = UDim2.new(0.5, -16, 1, 0)
+	stageLabel.Position          = UDim2.new(0.5, 0, 0, 0)
+	stageLabel.BackgroundTransparency = 1
+	stageLabel.Text              = "進化段階: Stage 0"
+	stageLabel.TextColor3        = Color3.fromRGB(255, 220, 50)
+	stageLabel.Font              = Enum.Font.GothamBold
+	stageLabel.TextSize          = 24
+	stageLabel.TextXAlignment    = Enum.TextXAlignment.Right
+	stageLabel.Parent            = topBar
+
+	-- ボタンエリア（画面下部中央）-------------------------------
+	local buttonArea = Instance.new("Frame")
+	buttonArea.Name                   = "ButtonArea"
+	buttonArea.AnchorPoint            = Vector2.new(0.5, 1)
+	buttonArea.Size                   = UDim2.new(0, 680, 0, 230)
+	buttonArea.Position               = UDim2.new(0.5, 0, 1, -24)
+	buttonArea.BackgroundTransparency = 1
+	buttonArea.Parent                 = screenGui
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.FillDirection       = Enum.FillDirection.Horizontal
+	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	listLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
+	listLayout.Padding             = UDim.new(0, 20)
+	listLayout.Parent              = buttonArea
+
+	-- 各ボタン生成 -------------------------------------------
+	for _, def in ipairs(BUTTON_DEFS) do
+		-- コンテナ（ボタン本体＋数値ラベルをまとめる）
+		local container = Instance.new("Frame")
+		container.Name                   = def.statName .. "Container"
+		container.Size                   = UDim2.new(0, 200, 1, 0)
+		container.BackgroundTransparency = 1
+		container.Parent                 = buttonArea
+
+		-- トレーニングボタン
+		local btn = Instance.new("TextButton")
+		btn.Name             = def.statName .. "Button"
+		btn.Size             = UDim2.new(1, 0, 0, 170)
+		btn.BackgroundColor3 = def.color
+		btn.BorderSizePixel  = 0
+		btn.Text             = def.label
+		btn.TextColor3       = Color3.fromRGB(255, 255, 255)
+		btn.Font             = Enum.Font.GothamBold
+		btn.TextSize         = 22
+		btn.TextWrapped      = true
+		btn.AutoButtonColor  = false
+		btn.Parent           = container
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 18)
+		corner.Parent       = btn
+
+		local stroke = Instance.new("UIStroke")
+		stroke.Color     = def.darkColor
+		stroke.Thickness = 4
+		stroke.Parent    = btn
+
+		-- 現在値ラベル（ボタン直下）
+		local valueLabel = Instance.new("TextLabel")
+		valueLabel.Name              = def.statName .. "Value"
+		valueLabel.Size              = UDim2.new(1, 0, 0, 36)
+		valueLabel.Position          = UDim2.new(0, 0, 0, 178)
+		valueLabel.BackgroundTransparency = 1
+		valueLabel.Text              = def.valuePrefix .. ": 0"
+		valueLabel.TextColor3        = Color3.fromRGB(210, 210, 210)
+		valueLabel.Font              = Enum.Font.GothamBold
+		valueLabel.TextSize          = 22
+		valueLabel.Parent            = container
+
+		valueLabels[def.statName] = { label = valueLabel, prefix = def.valuePrefix }
+
+		-- クリック時の処理
+		btn.MouseButton1Click:Connect(function()
+			playClickAnimation(btn)
+			PlayerData.addPower(def.statName, Config.PowerPerClick[def.statName])
+
+			local newStage = PlayerData.getEvolutionStage()
+			if newStage > prevStage then
+				prevStage = newStage
+				showEvolutionNotice(newStage)
+			end
+
+			updateDisplay()
+		end)
+
+		-- ホバーで色を暗くする
+		btn.MouseEnter:Connect(function()
+			TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = def.darkColor }):Play()
+		end)
+		btn.MouseLeave:Connect(function()
+			TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = def.color }):Play()
+		end)
+	end
+
+	-- 進化演出テキスト（画面中央・ZIndex最前面）---------------
+	evolutionNotice = Instance.new("TextLabel")
+	evolutionNotice.Name                   = "EvolutionNotice"
+	evolutionNotice.AnchorPoint            = Vector2.new(0.5, 0.5)
+	evolutionNotice.Size                   = UDim2.new(0, 520, 0, 80)
+	evolutionNotice.Position               = UDim2.new(0.5, 0, 0.42, 0)
+	evolutionNotice.BackgroundColor3       = Color3.fromRGB(30, 20, 60)
+	evolutionNotice.BackgroundTransparency = 1
+	evolutionNotice.Text                   = ""
+	evolutionNotice.TextColor3             = Color3.fromRGB(255, 220, 50)
+	evolutionNotice.Font                   = Enum.Font.GothamBold
+	evolutionNotice.TextSize               = 36
+	evolutionNotice.Visible                = false
+	evolutionNotice.ZIndex                 = 10
+	evolutionNotice.Parent                 = screenGui
+
+	local noticeCorner = Instance.new("UICorner")
+	noticeCorner.CornerRadius = UDim.new(0, 14)
+	noticeCorner.Parent       = evolutionNotice
+
+	updateDisplay()
+end
+
+return TrainingUI
+]]></ProtectedString>
+						<string name="ScriptGuid">{370c5803-7459-4c33-bf4c-ed0343382c5c}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<UniqueId name="HistoryId">00000000000000000000000000000000</UniqueId>
+						<string name="Name">TrainingUI</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+						<UniqueId name="UniqueId">5d03be59ee8cd2dd09b935f10000094a</UniqueId>
+					</Properties>
+				</Item>
 			</Item>
 		</Item>
 		<Item class="StarterCharacterScripts" referent="RBXd0dadfc658fd460e98c0b7ea9768d40b">
@@ -1166,6 +1451,122 @@ end
 					<int64 name="SourceAssetId">-1</int64>
 					<BinaryString name="Tags"></BinaryString>
 					<UniqueId name="UniqueId">06786fbfddfabcf409b8414600000399</UniqueId>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX3a41cff0f3204b15ab15054ec3253e64">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- ゲームバランス定数
+
+local Config = {}
+
+-- 初期ステータス値
+Config.InitialStats = {
+	DashPower   = 0,
+	JumpPower   = 0,
+	FlightPower = 0,
+}
+
+-- クリックあたりの成長量
+Config.PowerPerClick = {
+	DashPower   = 1,
+	JumpPower   = 1,
+	FlightPower = 1,
+}
+
+-- 進化段階の閾値（DashPower基準）
+Config.EvolutionThresholds = { 100, 500, 2000, 10000, 50000 }
+
+-- 惑星アンロックに必要な到達高度
+Config.PlanetAltitude = {
+	Moon   = 1000,
+	Mars   = 5000,
+	Saturn = 20000,
+}
+
+return Config
+]]></ProtectedString>
+					<string name="ScriptGuid">{6f9b8f75-fdf1-4fa8-b38d-07cdd63313f2}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<UniqueId name="HistoryId">00000000000000000000000000000000</UniqueId>
+					<string name="Name">Config</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+					<UniqueId name="UniqueId">5d03be59ee8cd2dd09b935f100000907</UniqueId>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX6ada0c237b094a62be2b04c56cf88c68">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- プレイヤーステータス管理モジュール（セッション中メモリのみ）
+
+local Config = require(script.Parent.Config)
+
+local PlayerData = {}
+
+-- 内部ステータステーブル
+local data = {
+	DashPower     = Config.InitialStats.DashPower,
+	JumpPower     = Config.InitialStats.JumpPower,
+	FlightPower   = Config.InitialStats.FlightPower,
+	MaxAltitude   = 0,
+	Coins         = 0,
+	CurrentPlanet = "Earth",
+}
+
+-- 現在のデータテーブルを返す（コピーで返すことで外部からの直接書き換えを防ぐ）
+function PlayerData.getData(): { [string]: any }
+	local copy = {}
+	for k, v in pairs(data) do
+		copy[k] = v
+	end
+	return copy
+end
+
+-- 指定ステータスに amount を加算する
+function PlayerData.addPower(statName: string, amount: number)
+	assert(data[statName] ~= nil, "PlayerData.addPower: 不明なステータス名: " .. tostring(statName))
+	assert(type(amount) == "number", "PlayerData.addPower: amount は数値である必要があります")
+	data[statName] = data[statName] + amount
+end
+
+-- 現在の進化段階を返す（0 = 初期、Config.EvolutionThresholds の数だけ段階が上がる）
+function PlayerData.getEvolutionStage(): number
+	local thresholds = Config.EvolutionThresholds
+	local stage = 0
+	for _, threshold in ipairs(thresholds) do
+		if data.DashPower >= threshold then
+			stage += 1
+		else
+			break
+		end
+	end
+	return stage
+end
+
+-- 初期状態にリセット（テスト用）
+function PlayerData.reset()
+	data.DashPower     = Config.InitialStats.DashPower
+	data.JumpPower     = Config.InitialStats.JumpPower
+	data.FlightPower   = Config.InitialStats.FlightPower
+	data.MaxAltitude   = 0
+	data.Coins         = 0
+	data.CurrentPlanet = "Earth"
+end
+
+return PlayerData
+]]></ProtectedString>
+					<string name="ScriptGuid">{dbaddde2-f2b4-4cbd-94ce-0e9b009cdb9c}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<UniqueId name="HistoryId">00000000000000000000000000000000</UniqueId>
+					<string name="Name">PlayerData</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+					<UniqueId name="UniqueId">5d03be59ee8cd2dd09b935f10000090a</UniqueId>
 				</Properties>
 			</Item>
 		</Item>

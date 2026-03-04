@@ -1,2 +1,2 @@
-local TrainingUI = require(script.TrainingUI)
-TrainingUI.init()
+local GameFlow = require(script.GameFlow)
+GameFlow.init()

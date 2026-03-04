@@ -306,27 +306,27 @@ gcLgc4RKxr21zq2UlJSM]]></BinaryString>
 		<Item class="Camera" referent="RBX99376b2455bd4323b8008cf949ca469e">
 			<Properties>
 				<CoordinateFrame name="CFrame">
-					<X>13.7141609</X>
-					<Y>13.9141188</Y>
-					<Z>20.3637753</Z>
-					<R00>0.879648328</R00>
-					<R01>-0.206708223</R01>
-					<R02>0.428358018</R02>
-					<R10>-1.49011612e-08</R10>
-					<R11>0.900621891</R11>
-					<R12>0.434603631</R12>
-					<R20>-0.47562474</R20>
-					<R21>-0.38229835</R21>
-					<R22>0.792230487</R22>
+					<X>76.4431686</X>
+					<Y>26.6687241</Y>
+					<Z>-3.00759864</Z>
+					<R00>0.632016599</R00>
+					<R01>0.383966833</R01>
+					<R02>-0.673145235</R02>
+					<R10>-1.49011594e-08</R10>
+					<R11>0.868625045</R11>
+					<R12>0.495469987</R12>
+					<R20>0.774954796</R20>
+					<R21>-0.31314525</R21>
+					<R22>0.548985541</R22>
 				</CoordinateFrame>
 				<Ref name="CameraSubject">null</Ref>
 				<token name="CameraType">0</token>
 				<float name="FieldOfView">70</float>
 				<token name="FieldOfViewMode">0</token>
 				<CoordinateFrame name="Focus">
-					<X>0</X>
-					<Y>0</Y>
-					<Z>-5</Z>
+					<X>77.7894592</X>
+					<Y>25.677784</Y>
+					<Z>-4.10556984</Z>
 					<R00>1</R00>
 					<R01>0</R01>
 					<R02>0</R02>
@@ -843,6 +843,12 @@ gcLgc4RKxr21zq2UlJSM]]></BinaryString>
 				<Properties>
 					<ProtectedString name="Source"><![CDATA[local TrainingUI = require(script.TrainingUI)
 TrainingUI.init()
+
+local MiniHUD = require(script.MiniHUD)
+MiniHUD.init()
+
+local MovementController = require(script.MovementController)
+MovementController.init()
 ]]></ProtectedString>
 					<bool name="Disabled">false</bool>
 					<Content name="LinkedSource"><null></null></Content>
@@ -866,8 +872,10 @@ local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService      = game:GetService("TweenService")
 
-local PlayerData = require(ReplicatedStorage.Shared.PlayerData)
-local Config     = require(ReplicatedStorage.Shared.Config)
+local PlayerData         = require(ReplicatedStorage.Shared.PlayerData)
+local Config             = require(ReplicatedStorage.Shared.Config)
+local MiniHUD            = require(script.Parent.MiniHUD)
+local MovementController = require(script.Parent.MovementController)
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
@@ -929,6 +937,8 @@ local function updateDisplay()
 	for statName, info in pairs(valueLabels) do
 		info.label.Text = info.prefix .. ": " .. (d[statName] :: number)
 	end
+	MiniHUD.update()
+	MovementController.update()
 end
 
 -- ボタンをぽんと大きくするアニメーション
@@ -1105,6 +1115,38 @@ function TrainingUI.init()
 		end)
 	end
 
+	-- リセットボタン（画面右下・目立ちすぎないグレー）-----------
+	local resetBtn = Instance.new("TextButton")
+	resetBtn.Name             = "ResetButton"
+	resetBtn.AnchorPoint      = Vector2.new(1, 1)
+	resetBtn.Size             = UDim2.new(0, 90, 0, 44)
+	resetBtn.Position         = UDim2.new(1, -12, 1, -12)
+	resetBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+	resetBtn.BorderSizePixel  = 0
+	resetBtn.Text             = "🔄 リセット"
+	resetBtn.TextColor3       = Color3.fromRGB(200, 200, 200)
+	resetBtn.Font             = Enum.Font.GothamBold
+	resetBtn.TextSize         = 14
+	resetBtn.AutoButtonColor  = false
+	resetBtn.ZIndex           = 5
+	resetBtn.Parent           = screenGui
+
+	local resetCorner = Instance.new("UICorner")
+	resetCorner.CornerRadius = UDim.new(0, 8)
+	resetCorner.Parent       = resetBtn
+
+	resetBtn.MouseButton1Click:Connect(function()
+		PlayerData.reset()
+		prevStage = 0
+		updateDisplay()
+	end)
+	resetBtn.MouseEnter:Connect(function()
+		TweenService:Create(resetBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(55, 55, 55) }):Play()
+	end)
+	resetBtn.MouseLeave:Connect(function()
+		TweenService:Create(resetBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(90, 90, 90) }):Play()
+	end)
+
 	-- 進化演出テキスト（画面中央・ZIndex最前面）---------------
 	evolutionNotice = Instance.new("TextLabel")
 	evolutionNotice.Name                   = "EvolutionNotice"
@@ -1139,6 +1181,417 @@ return TrainingUI
 						<int64 name="SourceAssetId">-1</int64>
 						<BinaryString name="Tags"></BinaryString>
 						<UniqueId name="UniqueId">5d03be59ee8cd2dd09b935f10000094a</UniqueId>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBXb3d7632b2b594942b6d271d05058f9a5">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- ミニHUD: 画面左上に常時表示するステータス情報
+
+local Players           = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local PlayerData = require(ReplicatedStorage.Shared.PlayerData)
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
+
+local MiniHUD = {}
+
+-- init() 前に update() が呼ばれても安全にするためのフラグ
+local initialized = false
+
+local ROW_DEFS = {
+	{ key = "DashPower",   icon = "🦵", label = "脚力"      },
+	{ key = "JumpPower",   icon = "⬆️",  label = "ジャンプ力" },
+	{ key = "FlightPower", icon = "🪽",  label = "飛行力"    },
+	{ key = "MaxAltitude", icon = "🏔️", label = "最高高度"  },
+	{ key = "Stage",       icon = "★",  label = "Stage"     },
+}
+
+local rowLabels = {} :: { [string]: TextLabel }
+
+-- ─────────────────────────────────────────
+-- 公開API
+-- ─────────────────────────────────────────
+
+-- 表示内容を最新のPlayerDataで更新する
+function MiniHUD.update()
+	if not initialized then return end
+	local d     = PlayerData.getData()
+	local stage = PlayerData.getEvolutionStage()
+	for _, row in ipairs(ROW_DEFS) do
+		local value: number | string = if row.key == "Stage"
+			then stage
+			else (d[row.key] :: number)
+		rowLabels[row.key].Text = row.icon .. " " .. row.label .. ": " .. value
+	end
+end
+
+-- HUDのUIを構築して表示を開始する
+function MiniHUD.init()
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name         = "MiniHUD"
+	screenGui.ResetOnSpawn = false
+	screenGui.Parent       = PlayerGui
+
+	-- 背景フレーム（半透明の黒）
+	-- 行数 × 行高(20) + ギャップ(2) × (行数-1) + 上下パディング(16) = 124px
+	local frame = Instance.new("Frame")
+	frame.Name                   = "HUDFrame"
+	frame.Size                   = UDim2.new(0, 184, 0, 124)
+	frame.Position               = UDim2.new(0, 12, 0, 76)
+	frame.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
+	frame.BackgroundTransparency = 0.45
+	frame.BorderSizePixel        = 0
+	frame.Parent                 = screenGui
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent       = frame
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft   = UDim.new(0, 10)
+	padding.PaddingRight  = UDim.new(0, 10)
+	padding.PaddingTop    = UDim.new(0, 8)
+	padding.PaddingBottom = UDim.new(0, 8)
+	padding.Parent        = frame
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.FillDirection     = Enum.FillDirection.Vertical
+	listLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+	listLayout.Padding           = UDim.new(0, 2)
+	listLayout.Parent            = frame
+
+	-- 各ステータス行を生成
+	for _, row in ipairs(ROW_DEFS) do
+		local lbl = Instance.new("TextLabel")
+		lbl.Name                   = row.key .. "Label"
+		lbl.Size                   = UDim2.new(1, 0, 0, 20)
+		lbl.BackgroundTransparency = 1
+		lbl.Text                   = row.icon .. " " .. row.label .. ": 0"
+		lbl.TextColor3             = Color3.fromRGB(230, 230, 230)
+		lbl.Font                   = Enum.Font.Gotham
+		lbl.TextSize               = 15
+		lbl.TextXAlignment         = Enum.TextXAlignment.Left
+		lbl.Parent                 = frame
+
+		rowLabels[row.key] = lbl
+	end
+
+	initialized = true
+	MiniHUD.update()
+end
+
+return MiniHUD
+]]></ProtectedString>
+						<string name="ScriptGuid">{220ee37d-1b7c-49fb-b892-d5e2056154bc}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<UniqueId name="HistoryId">00000000000000000000000000000000</UniqueId>
+						<string name="Name">MiniHUD</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+						<UniqueId name="UniqueId">6d41baed62a0deee09b93f78000008d3</UniqueId>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBXbacffb6bd38742b0a72e3324b45aae1a">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- 移動能力コントローラー
+-- DashPower / JumpPower / FlightPower をキャラクターの実際の能力に反映する
+
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local PlayerData  = require(ReplicatedStorage.Shared.PlayerData)
+local LocalPlayer = Players.LocalPlayer
+
+local MovementController = {}
+
+-- ─────────────────────────────────────────
+-- 内部状態
+-- ─────────────────────────────────────────
+local flightEnergy    = 0
+local maxFlightEnergy = 0
+local isFlying        = false
+
+local energyBar       = nil :: Frame?
+local energyLabel     = nil :: TextLabel?
+local energyContainer = nil :: Frame?
+
+local humanoid     = nil :: Humanoid?
+local rootPart     = nil :: BasePart?
+local bodyVelocity = nil :: BodyVelocity?
+
+-- ─────────────────────────────────────────
+-- ステータス計算式
+-- ─────────────────────────────────────────
+local function calcWalkSpeed(dp: number): number
+	return math.min(16 + dp * 0.05, 100)
+end
+
+local function calcJumpPower(jp: number): number
+	return math.min(50 + jp * 0.1, 300)
+end
+
+local function calcFlightSpeed(fp: number): number
+	return math.min(20 + fp * 0.02, 80)
+end
+
+local function calcMaxEnergy(fp: number): number
+	return math.min(fp * 0.01, 30)
+end
+
+-- ─────────────────────────────────────────
+-- BodyVelocity 管理
+-- ─────────────────────────────────────────
+local function removeBodyVelocity()
+	if bodyVelocity then
+		bodyVelocity:Destroy()
+		bodyVelocity = nil
+	end
+end
+
+-- ─────────────────────────────────────────
+-- 飛行エネルギー UI 更新
+-- ─────────────────────────────────────────
+local function updateEnergyUI()
+	if not energyBar or not energyLabel or not energyContainer then return end
+
+	if maxFlightEnergy <= 0 then
+		energyContainer.Visible = false
+		return
+	end
+
+	energyContainer.Visible = true
+
+	local ratio = math.clamp(flightEnergy / maxFlightEnergy, 0, 1)
+	energyBar.Size = UDim2.new(ratio, 0, 1, 0)
+
+	-- 緑 (1.0) → 黄 (0.5) → 赤 (0.0)
+	local r: number, g: number
+	if ratio >= 0.5 then
+		local t = (ratio - 0.5) * 2  -- 1 → 0
+		r = 1 - t
+		g = 1
+	else
+		local t = ratio * 2           -- 0 → 1
+		r = 1
+		g = t
+	end
+	energyBar.BackgroundColor3 = Color3.new(r, g, 0)
+
+	energyLabel.Text = string.format("飛行エネルギー: %.1f / %.1f", flightEnergy, maxFlightEnergy)
+end
+
+-- ─────────────────────────────────────────
+-- WalkSpeed / JumpPower / MaxEnergy の適用
+-- ─────────────────────────────────────────
+local function applyStats()
+	if not humanoid then return end
+
+	local d           = PlayerData.getData()
+	local dashPower   = d.DashPower   :: number
+	local jumpPower   = d.JumpPower   :: number
+	local flightPower = d.FlightPower :: number
+
+	humanoid.WalkSpeed = calcWalkSpeed(dashPower)
+	humanoid.JumpPower = calcJumpPower(jumpPower)
+	maxFlightEnergy    = calcMaxEnergy(flightPower)
+
+	if flightPower <= 0 then
+		isFlying = false
+		removeBodyVelocity()
+		flightEnergy = 0
+	else
+		flightEnergy = math.min(flightEnergy, maxFlightEnergy)
+	end
+
+	updateEnergyUI()
+end
+
+-- ─────────────────────────────────────────
+-- キャラクター初期化（リスポーン対応）
+-- ─────────────────────────────────────────
+local function setupCharacter(char: Model)
+	humanoid = char:WaitForChild("Humanoid") :: Humanoid
+	rootPart = char:WaitForChild("HumanoidRootPart") :: BasePart
+
+	isFlying     = false
+	bodyVelocity = nil
+	flightEnergy = 0
+
+	applyStats()
+end
+
+-- ─────────────────────────────────────────
+-- 飛行エネルギー UI の構築
+-- ─────────────────────────────────────────
+local function buildEnergyUI()
+	local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+	local existing = playerGui:FindFirstChild("FlightEnergyUI")
+	if existing then existing:Destroy() end
+
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name         = "FlightEnergyUI"
+	screenGui.ResetOnSpawn = false
+	screenGui.Parent       = playerGui
+
+	-- コンテナ（画面右下、リセットボタンより上に配置）
+	local container = Instance.new("Frame")
+	container.Name                   = "EnergyContainer"
+	container.AnchorPoint            = Vector2.new(1, 1)
+	container.Size                   = UDim2.new(0, 300, 0, 60)
+	container.Position               = UDim2.new(1, -12, 1, -68)
+	container.BackgroundColor3       = Color3.fromRGB(20, 20, 30)
+	container.BackgroundTransparency = 0.3
+	container.BorderSizePixel        = 0
+	container.Visible                = false
+	container.Parent                 = screenGui
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent       = container
+
+	-- テキストラベル
+	local label = Instance.new("TextLabel")
+	label.Name                   = "EnergyLabel"
+	label.Size                   = UDim2.new(1, -16, 0, 20)
+	label.Position               = UDim2.new(0, 8, 0, 6)
+	label.BackgroundTransparency = 1
+	label.Text                   = "飛行エネルギー: 0.0 / 0.0"
+	label.TextColor3             = Color3.fromRGB(220, 220, 220)
+	label.Font                   = Enum.Font.GothamBold
+	label.TextSize               = 13
+	label.TextXAlignment         = Enum.TextXAlignment.Left
+	label.Parent                 = container
+
+	-- バー背景
+	local barBg = Instance.new("Frame")
+	barBg.Name             = "BarBackground"
+	barBg.Size             = UDim2.new(1, -16, 0, 22)
+	barBg.Position         = UDim2.new(0, 8, 0, 30)
+	barBg.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	barBg.BorderSizePixel  = 0
+	barBg.ClipsDescendants = true
+	barBg.Parent           = container
+
+	local barBgCorner = Instance.new("UICorner")
+	barBgCorner.CornerRadius = UDim.new(0, 6)
+	barBgCorner.Parent       = barBg
+
+	-- エネルギーバー本体
+	local bar = Instance.new("Frame")
+	bar.Name             = "EnergyBar"
+	bar.Size             = UDim2.new(1, 0, 1, 0)
+	bar.BackgroundColor3 = Color3.new(0, 1, 0)
+	bar.BorderSizePixel  = 0
+	bar.Parent           = barBg
+
+	local barCorner = Instance.new("UICorner")
+	barCorner.CornerRadius = UDim.new(0, 6)
+	barCorner.Parent       = bar
+
+	energyContainer = container
+	energyBar       = bar
+	energyLabel     = label
+end
+
+-- ─────────────────────────────────────────
+-- メインループ（毎フレーム）
+-- ─────────────────────────────────────────
+local function startHeartbeat()
+	RunService.Heartbeat:Connect(function(dt: number)
+		if not humanoid or not rootPart then return end
+
+		local d           = PlayerData.getData()
+		local flightPower = d.FlightPower :: number
+
+		if flightPower <= 0 then
+			if isFlying then
+				isFlying = false
+				removeBodyVelocity()
+			end
+			return
+		end
+
+		local grounded = humanoid.FloorMaterial ~= Enum.Material.Air
+
+		if grounded then
+			if isFlying then
+				isFlying = false
+				removeBodyVelocity()
+			end
+			-- 着地中はエネルギーを毎秒 2 回復
+			flightEnergy = math.min(flightEnergy + 2 * dt, maxFlightEnergy)
+		else
+			local spaceHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space)
+
+			if spaceHeld and flightEnergy > 0 then
+				-- 飛行中
+				isFlying = true
+				local speed = calcFlightSpeed(flightPower)
+
+				if not bodyVelocity or not bodyVelocity.Parent then
+					bodyVelocity          = Instance.new("BodyVelocity")
+					bodyVelocity.Velocity = Vector3.new(0, speed, 0)
+					bodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
+					bodyVelocity.P        = 10000
+					bodyVelocity.Parent   = rootPart
+				else
+					bodyVelocity.Velocity = Vector3.new(0, speed, 0)
+				end
+
+				-- 毎秒 1 消費
+				flightEnergy = math.max(flightEnergy - dt, 0)
+			else
+				if isFlying then
+					isFlying = false
+					removeBodyVelocity()
+				end
+			end
+		end
+
+		updateEnergyUI()
+	end)
+end
+
+-- ─────────────────────────────────────────
+-- 公開 API
+-- ─────────────────────────────────────────
+
+-- PlayerData が変わったときに外部から呼ぶ
+function MovementController.update()
+	applyStats()
+end
+
+function MovementController.init()
+	buildEnergyUI()
+
+	if LocalPlayer.Character then
+		setupCharacter(LocalPlayer.Character)
+	end
+
+	LocalPlayer.CharacterAdded:Connect(setupCharacter)
+	startHeartbeat()
+end
+
+return MovementController
+]]></ProtectedString>
+						<string name="ScriptGuid">{da169365-1499-4aef-b38f-7e4d59c12525}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<UniqueId name="HistoryId">00000000000000000000000000000000</UniqueId>
+						<string name="Name">MovementController</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+						<UniqueId name="UniqueId">6d41baed62a0deee09b93f78000008d6</UniqueId>
 					</Properties>
 				</Item>
 			</Item>
@@ -1600,6 +2053,158 @@ return PlayerData
 				<BinaryString name="Tags"></BinaryString>
 				<UniqueId name="UniqueId">06786fbfddfabcf409b841460000039a</UniqueId>
 			</Properties>
+			<Item class="Script" referent="RBXc128c120776a4891bac7084219607c9b">
+				<Properties>
+					<ProtectedString name="Source"><![CDATA[local Workspace = game:GetService("Workspace")
+
+local function createPart(name, size, pos, color, parent, material, transparency)
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Size = size
+	part.Position = pos
+	part.Color = color
+	part.Anchored = true
+	if material then part.Material = material end
+	if transparency then part.Transparency = transparency end
+	part.Parent = parent
+	return part
+end
+
+local function createWedge(name, size, pos, color, parent)
+	local wedge = Instance.new("WedgePart")
+	wedge.Name = name
+	wedge.Size = size
+	wedge.Position = pos
+	wedge.Color = color
+	wedge.Anchored = true
+	wedge.Parent = parent
+	return wedge
+end
+
+local function createSign(text, size, pos, parent)
+	local sign = Instance.new("Part")
+	sign.Name = "Sign"
+	sign.Size = size
+	sign.Position = pos
+	sign.Anchored = true
+	sign.CanCollide = false
+	sign.Parent = parent
+
+	local surfaceGui = Instance.new("SurfaceGui")
+	surfaceGui.Face = Enum.NormalId.Front
+	surfaceGui.Parent = sign
+
+	local textLabel = Instance.new("TextLabel")
+	textLabel.Size = UDim2.new(1, 0, 1, 0)
+	textLabel.BackgroundTransparency = 1
+	textLabel.Text = text
+	textLabel.TextScaled = true
+	textLabel.TextColor3 = Color3.new(0, 0, 0)
+	textLabel.Parent = surfaceGui
+
+	return sign
+end
+
+local function buildMap()
+	-- 1. スポーンエリア整備
+	local baseplate = Workspace:FindFirstChild("Baseplate")
+	if baseplate then
+		baseplate.Color = Color3.fromRGB(170, 210, 240)
+	end
+
+	local spawnLocation = Workspace:FindFirstChild("SpawnLocation")
+	if not spawnLocation then
+		spawnLocation = Instance.new("SpawnLocation")
+		spawnLocation.Name = "SpawnLocation"
+		spawnLocation.Size = Vector3.new(12, 1, 12)
+		spawnLocation.Position = Vector3.new(0, 1, 0)
+		spawnLocation.Anchored = true
+		spawnLocation.Parent = Workspace
+	end
+
+	-- 2. トレーニングゾーン
+	local trainingZone = Workspace:FindFirstChild("TrainingZone")
+	if not trainingZone then
+		trainingZone = Instance.new("Model")
+		trainingZone.Name = "TrainingZone"
+		trainingZone.Parent = Workspace
+
+		-- 床プラットフォーム（大）
+		createPart("Floor", Vector3.new(60, 1, 40), Vector3.new(0, 0.5, 40), Color3.fromRGB(40, 40, 60), trainingZone, Enum.Material.SmoothPlastic)
+
+		-- 脚力エリア（左側）
+		createPart("LegPowerArea", Vector3.new(16, 0.5, 16), Vector3.new(-18, 1, 40), Color3.fromRGB(52, 152, 219), trainingZone)
+		createSign("🦵 脚力", Vector3.new(10, 6, 0.5), Vector3.new(-18, 5, 32), trainingZone)
+
+		-- ジャンプエリア（中央）
+		createPart("JumpArea", Vector3.new(16, 0.5, 16), Vector3.new(0, 1, 40), Color3.fromRGB(39, 174, 96), trainingZone)
+		createSign("⬆️ ジャンプ", Vector3.new(10, 6, 0.5), Vector3.new(0, 5, 32), trainingZone)
+
+		-- 飛行エリア（右側）
+		createPart("FlightArea", Vector3.new(16, 0.5, 16), Vector3.new(18, 1, 40), Color3.fromRGB(142, 68, 173), trainingZone)
+		createSign("🪽 飛行", Vector3.new(10, 6, 0.5), Vector3.new(18, 5, 32), trainingZone)
+	end
+
+	-- 3. 発射台
+	local launchPad = Workspace:FindFirstChild("LaunchPad")
+	if not launchPad then
+		launchPad = Instance.new("Model")
+		launchPad.Name = "LaunchPad"
+		launchPad.Parent = Workspace
+
+		-- ランプ本体
+		local ramp = createWedge("Ramp", Vector3.new(20, 20, 40), Vector3.new(0, 10, 90), Color3.fromRGB(255, 170, 0), launchPad)
+		
+		-- ジャンプパッド（ランプ頂上）
+		createPart("JumpPad", Vector3.new(20, 1, 10), Vector3.new(0, 21, 105), Color3.fromRGB(255, 255, 0), launchPad)
+
+		-- 矢印看板
+		createSign("🚀 発射台 →", Vector3.new(12, 8, 0.5), Vector3.new(0, 10, 68), launchPad)
+	end
+
+	-- 4. 高度マーカー
+	local altitudeMarkers = Workspace:FindFirstChild("AltitudeMarkers")
+	if not altitudeMarkers then
+		altitudeMarkers = Instance.new("Model")
+		altitudeMarkers.Name = "AltitudeMarkers"
+		altitudeMarkers.Parent = Workspace
+
+		-- 高度100
+		local m100 = createPart("Marker100", Vector3.new(30, 1, 30), Vector3.new(0, 100, 105), Color3.fromRGB(100, 200, 100), altitudeMarkers, nil, 0.7)
+		m100.CanCollide = false
+		
+		-- 高度500
+		local m500 = createPart("Marker500", Vector3.new(30, 1, 30), Vector3.new(0, 500, 105), Color3.fromRGB(100, 100, 200), altitudeMarkers, nil, 0.7)
+		m500.CanCollide = false
+
+		-- 高度1000
+		local m1000 = createPart("Marker1000", Vector3.new(30, 1, 30), Vector3.new(0, 1000, 105), Color3.fromRGB(255, 215, 0), altitudeMarkers, nil, 0.6)
+		m1000.CanCollide = false
+		createSign("🌙 月まであと少し！", Vector3.new(20, 8, 0.5), Vector3.new(0, 1010, 105), altitudeMarkers)
+
+		-- 高度5000
+		local m5000 = createPart("Marker5000", Vector3.new(30, 1, 30), Vector3.new(0, 5000, 105), Color3.fromRGB(255, 100, 100), altitudeMarkers, nil, 0.6)
+		m5000.CanCollide = false
+		createSign("🔴 火星が見えてきた！", Vector3.new(20, 8, 0.5), Vector3.new(0, 5010, 105), altitudeMarkers)
+	end
+end
+
+buildMap()
+]]></ProtectedString>
+					<bool name="Disabled">false</bool>
+					<Content name="LinkedSource"><null></null></Content>
+					<token name="RunContext">0</token>
+					<string name="ScriptGuid">{0f632616-560d-4aad-9244-0b57e3ed52bb}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<UniqueId name="HistoryId">00000000000000000000000000000000</UniqueId>
+					<string name="Name">MapBuilder</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+					<UniqueId name="UniqueId">6d41baed62a0deee09b93f78000008d8</UniqueId>
+				</Properties>
+			</Item>
 		</Item>
 	</Item>
 	<Item class="ServerStorage" referent="RBXa39db85d64134c30946aa21aa4e91eca">

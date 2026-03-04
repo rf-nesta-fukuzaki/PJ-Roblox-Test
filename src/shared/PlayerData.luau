@@ -6,12 +6,10 @@ local PlayerData = {}
 
 -- 内部ステータステーブル
 local data = {
-	DashPower     = Config.InitialStats.DashPower,
-	JumpPower     = Config.InitialStats.JumpPower,
-	FlightPower   = Config.InitialStats.FlightPower,
-	MaxAltitude   = 0,
-	Coins         = 0,
-	CurrentPlanet = "Earth",
+	JumpPower   = Config.InitialStats.JumpPower,
+	Speed       = Config.InitialStats.Speed,
+	MaxAltitude = 0,
+	Coins       = 0,
 }
 
 -- 現在のデータテーブルを返す（コピーで返すことで外部からの直接書き換えを防ぐ）
@@ -35,7 +33,7 @@ function PlayerData.getEvolutionStage(): number
 	local thresholds = Config.EvolutionThresholds
 	local stage = 0
 	for _, threshold in ipairs(thresholds) do
-		if data.DashPower >= threshold then
+		if data.JumpPower >= threshold then
 			stage += 1
 		else
 			break
@@ -44,14 +42,21 @@ function PlayerData.getEvolutionStage(): number
 	return stage
 end
 
+-- 最高高度を更新する。更新した場合は true、しなければ false を返す
+function PlayerData.updateMaxAltitude(altitude: number): boolean
+	if altitude > data.MaxAltitude then
+		data.MaxAltitude = altitude
+		return true
+	end
+	return false
+end
+
 -- 初期状態にリセット（テスト用）
 function PlayerData.reset()
-	data.DashPower     = Config.InitialStats.DashPower
-	data.JumpPower     = Config.InitialStats.JumpPower
-	data.FlightPower   = Config.InitialStats.FlightPower
-	data.MaxAltitude   = 0
-	data.Coins         = 0
-	data.CurrentPlanet = "Earth"
+	data.JumpPower   = Config.InitialStats.JumpPower
+	data.Speed       = Config.InitialStats.Speed
+	data.MaxAltitude = 0
+	data.Coins       = 0
 end
 
 return PlayerData

@@ -47,6 +47,54 @@ rojo serve
 3. Run `rojo serve` to start live syncing — file changes in `src/` reflect immediately in Studio
 4. Test in Studio's Play mode; deploy via Roblox's publish workflow
 
+## Game Architecture
+
+**ゲーム名**: "Dash to the Stars" — トレーニングゾーンでJumpPower/Speedを積み上げ、発射台から高く飛ぶインクリメンタル系ゲーム。
+
+### 共有モジュール (`src/shared/`)
+
+| モジュール | 役割 |
+|---|---|
+| `Config.luau` | ゲームバランス定数（ステータス上限・進化閾値・ゾーン境界など） |
+| `PlayerData.luau` | セッション内メモリのプレイヤーステータス管理（DataStore未使用・永続化なし） |
+
+### クライアント起動フロー
+
+`init.client.luau` → `GameFlow.init()` が全クライアントモジュールを**依存関係順**に初期化する:
+
+```
+SoundManager → MiniHUD → TrainingUI → MovementController
+→ TrainingZoneDetector → AltitudeTracker → KillBrickHandler
+```
+
+全モジュールは `Module.init()` パターンを持つ。`Effects` は init なしで直接呼び出す。
+
+| クライアントモジュール | 役割 |
+|---|---|
+| `SoundManager` | SoundService に Sound インスタンスを配置して2D再生 |
+| `MiniHUD` | 左上の常時表示ステータスパネル |
+| `TrainingUI` | トレーニングボタンUI（トレーニングゾーン内のみ表示）|
+| `MovementController` | PlayerData の値を Humanoid.WalkSpeed / JumpPower に反映 |
+| `TrainingZoneDetector` | 0.2秒ポーリングでゾーン在/不在を検知しTrainingUIを表示切替 |
+| `AltitudeTracker` | 0.1秒ポーリングで高度監視・自己ベスト更新・マイルストーン通知 |
+| `KillBrickHandler` | Workspace の `KillBrick` に触れたらリスポーン |
+| `Effects` | パーティクル・トレイル・画面フラッシュなどのビジュアルエフェクト |
+
+### サーバースクリプト
+
+| スクリプト | 役割 |
+|---|---|
+| `MapBuilder.server.luau` | 起動時にTrainingZone・LaunchPad・AltitudeMarkersをWorkspaceに生成 |
+| `MapDecorator.server.luau` | 高度帯別にプラットフォームを装飾（Lighting/雲/Neonなど）|
+
+### 設計上の注意点
+
+- **RemoteEvent/Function は未使用** — すべてのゲームロジックはクライアント側で処理
+- **PlayerData は永続化なし** — リロードでリセットされる（DataStore未実装）
+- `KillBrick` はWorkspaceに存在する前提でクライアントが `WaitForChild` する
+- `Workspace.Platforms` フォルダが存在しない場合、MapDecorator は warn してスキップ
+- `Config.TrainingZoneBounds` の座標はMapBuilderが生成するTrainingZoneのFloor位置と一致させること
+
 ## Notes
 
 - `game.rbxlx` is committed to the repo (not ignored); `PJ-Roblox-Test.rbxlx` (build output) is git-ignored

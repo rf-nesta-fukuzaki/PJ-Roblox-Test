@@ -1,8 +1,9 @@
 -- ビジュアルエフェクト管理モジュール
 
-local Players      = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local Debris       = game:GetService("Debris")
+local Players           = game:GetService("Players")
+local TweenService      = game:GetService("TweenService")
+local Debris            = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -232,6 +233,144 @@ function Effects.landingDust(position: Vector3)
 
 	emitter:Emit(16)
 	Debris:AddItem(part, 1)
+end
+
+-- ─────────────────────────────────────────
+-- 通知UI（共通）
+-- ─────────────────────────────────────────
+
+local notifBg      = nil :: Frame?
+local notifLabel   = nil :: TextLabel?
+local notifVersion = 0
+
+local function getNotifUI(): (Frame, TextLabel)
+	if notifBg and notifBg.Parent then
+		return notifBg, notifLabel :: TextLabel
+	end
+
+	local playerGui = LocalPlayer.PlayerGui
+
+	local sg = Instance.new("ScreenGui")
+	sg.Name         = "NotificationGui"
+	sg.ResetOnSpawn = false
+	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	sg.Parent       = playerGui
+
+	local bg = Instance.new("Frame")
+	bg.AnchorPoint            = Vector2.new(0.5, 0)
+	bg.Size                   = UDim2.new(0, 500, 0, 46)
+	bg.Position               = UDim2.new(0.5, 0, 0, 80)
+	bg.BackgroundColor3       = Color3.fromRGB(20, 20, 40)
+	bg.BackgroundTransparency = 0.3
+	bg.BorderSizePixel        = 0
+	bg.Visible                = false
+	bg.ZIndex                 = 50
+	bg.Parent                 = sg
+	notifBg = bg
+
+	local bgCorner = Instance.new("UICorner")
+	bgCorner.CornerRadius = UDim.new(0, 12)
+	bgCorner.Parent       = bg
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Size                   = UDim2.new(1, 0, 1, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Text                   = ""
+	lbl.TextColor3             = Color3.fromRGB(255, 255, 255)
+	lbl.Font                   = Enum.Font.GothamBold
+	lbl.TextSize               = 18
+	lbl.ZIndex                 = 51
+	lbl.Parent                 = bg
+	notifLabel = lbl
+
+	return bg, lbl
+end
+
+function Effects.showNotification(text: string, duration: number)
+	local bg, lbl = getNotifUI()
+
+	notifVersion += 1
+	local myVersion = notifVersion
+
+	lbl.Text              = text
+	lbl.TextTransparency  = 0
+	bg.BackgroundTransparency = 0.3
+	bg.Visible = true
+
+	task.delay(duration, function()
+		if notifVersion ~= myVersion then return end
+		TweenService:Create(bg,  TweenInfo.new(0.4, Enum.EasingStyle.Quad), { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(lbl, TweenInfo.new(0.4, Enum.EasingStyle.Quad), { TextTransparency = 1 }):Play()
+		task.delay(0.4, function()
+			if notifVersion ~= myVersion then return end
+			bg.Visible = false
+		end)
+	end)
+end
+
+-- ─────────────────────────────────────────
+-- (f) 足場生成パーティクル
+-- ─────────────────────────────────────────
+
+function Effects.fallPlatformSpawn(position: Vector3)
+	local part = Instance.new("Part")
+	part.Size         = Vector3.new(0.1, 0.1, 0.1)
+	part.Position     = position + Vector3.new(0, 1, 0)
+	part.Anchored     = true
+	part.CanCollide   = false
+	part.Transparency = 1
+	part.CastShadow   = false
+	part.Parent       = workspace
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0,   Color3.fromRGB(100, 200, 255)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 255, 200)),
+		ColorSequenceKeypoint.new(1,   Color3.fromRGB(255, 255, 255)),
+	})
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.45),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	emitter.Lifetime       = NumberRange.new(0.5, 1.2)
+	emitter.Speed          = NumberRange.new(6, 18)
+	emitter.SpreadAngle    = Vector2.new(80, 80)
+	emitter.Rate           = 0
+	emitter.LightEmission  = 0.9
+	emitter.LightInfluence = 0.1
+	emitter.Parent         = part
+
+	emitter:Emit(24)
+	Debris:AddItem(part, 1.5)
+end
+
+-- ─────────────────────────────────────────
+-- (g) FallPlatformCreated RemoteEvent 受信
+-- ─────────────────────────────────────────
+
+function Effects.initFallPlatformListener()
+	local re = ReplicatedStorage:WaitForChild("FallPlatformCreated") :: RemoteEvent
+
+	re.OnClientEvent:Connect(function(player: Player, position: Vector3)
+		Effects.fallPlatformSpawn(position)
+
+		if player == LocalPlayer then
+			Effects.showNotification("💫 あなたの足場が出現！ みんなの踏み台に！", 1.5)
+		else
+			-- 近く（200スタッド以内）のみ通知
+			local char = LocalPlayer.Character
+			local notify = true
+			if char then
+				local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if root and (root.Position - position).Magnitude > 200 then
+					notify = false
+				end
+			end
+			if notify then
+				Effects.showNotification("✨ " .. player.Name .. "の足場が出現！", 1.0)
+			end
+		end
+	end)
 end
 
 return Effects

@@ -14,6 +14,12 @@ local LocalPlayer = Players.LocalPlayer
 
 local AltitudeTracker = {}
 
+-- リーダーボード更新用RemoteEvent（非同期取得）
+local updateLeaderboardRE = nil :: RemoteEvent?
+task.spawn(function()
+	updateLeaderboardRE = ReplicatedStorage:WaitForChild("UpdateLeaderboard") :: RemoteEvent
+end)
+
 -- ─────────────────────────────────────────
 -- 高度マーカー定義
 -- ─────────────────────────────────────────
@@ -231,6 +237,11 @@ function AltitudeTracker.init()
 			Effects.newRecordFlash()
 			SoundManager.playNewRecord()
 			MiniHUD.update()
+			-- リーダーボードに送信
+			if updateLeaderboardRE then
+				local d = PlayerData.getData()
+				updateLeaderboardRE:FireServer(d.MaxAltitude, d.RebirthCount)
+			end
 		end
 
 		-- 高度マーカー通過チェック

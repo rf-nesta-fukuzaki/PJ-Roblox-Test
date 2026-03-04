@@ -2,40 +2,139 @@
 
 local Config = {}
 
--- 初期ステータス値
+-- ===== 初期ステータス =====
 Config.InitialStats = {
-	JumpPower = 0,
-	Speed     = 0,
+	JumpPower      = 0,
+	Speed          = 0,
+	PowerGauge     = 0,
+	Coins          = 0,
+	RebirthCount   = 0,
+	TotalDistance  = 0,
+	EquippedShoes  = "none",
+	EquippedTrail  = "none",
 }
 
--- クリックあたりの成長量
-Config.PowerPerClick = {
-	JumpPower = 1,
-	Speed     = 1,
+-- ===== クリック育成（ジャンプ力）=====
+Config.Click = {
+	BasePerClick = 3,
 }
 
--- 進化段階の閾値（JumpPower基準）
-Config.EvolutionThresholds = { 100, 500, 2000, 10000, 50000 }
+-- ===== 走行距離育成（スピード）=====
+Config.Running = {
+	SpeedPerDistance  = 0.1,
+	PowerPerDistance  = 0.05,
+}
 
--- ジャンプ力の計算パラメータ
+-- ===== ジャンプ力反映 =====
 Config.Jump = {
-	Base       = 50,   -- 初期ジャンプ力
-	Multiplier = 0.1,  -- JumpPower 1あたりの加算値
-	Max        = 400,  -- 上限
+	Base       = 50,
+	Multiplier = 0.15,
+	Max        = 400,
 }
 
--- スピードの計算パラメータ
+-- ===== スピード反映 =====
 Config.Speed = {
-	Base       = 16,   -- 初期移動速度
-	Multiplier = 0.05, -- Speed 1あたりの加算値
-	Max        = 120,  -- 上限
+	Base       = 16,
+	Multiplier = 0.08,
+	Max        = 120,
 }
 
--- トレーニングゾーンの範囲（Phase 5で使用）
+-- ===== 進化段階（JumpPower基準）=====
+Config.EvolutionThresholds = { 50, 200, 800, 3000, 15000 }
+
+-- ===== リバース =====
+Config.Rebirth = {
+	CoinsPerPower          = 0.1,
+	ClickBonusPerRebirth   = 0.5,
+	SpeedBonusPerRebirth   = 0.02,
+	MinPowerGauge          = 100,
+}
+
+-- ===== ショップ（シューズ）=====
+Config.Shoes = {
+	starter = {
+		name        = "スターターシューズ",
+		cost        = 0,
+		clickBonus  = 0,
+		runBonus    = 0,
+		description = "最初の一足。",
+	},
+	runner = {
+		name        = "🏃 ランナーシューズ",
+		cost        = 50,
+		clickBonus  = 1,
+		runBonus    = 0.05,
+		description = "走るのが少し楽しくなる。",
+	},
+	springs = {
+		name        = "🦘 スプリングシューズ",
+		cost        = 200,
+		clickBonus  = 3,
+		runBonus    = 0.1,
+		description = "バネの力でジャンプ力UP！",
+	},
+	rocket = {
+		name        = "🚀 ロケットシューズ",
+		cost        = 1000,
+		clickBonus  = 8,
+		runBonus    = 0.3,
+		description = "宇宙を目指す者のための一足。",
+	},
+	legendary = {
+		name        = "👑 レジェンダリーシューズ",
+		cost        = 5000,
+		clickBonus  = 20,
+		runBonus    = 1.0,
+		description = "伝説の靴。全てが加速する。",
+	},
+	galaxy = {
+		name        = "🌌 ギャラクシーシューズ",
+		cost        = 25000,
+		clickBonus  = 50,
+		runBonus    = 3.0,
+		description = "銀河を駆ける者だけが履ける。",
+	},
+}
+Config.ShoesOrder = { "starter", "runner", "springs", "rocket", "legendary", "galaxy" }
+
+-- ===== トレイル（見た目装備）=====
+Config.Trails = {
+	none    = { name = "なし",              cost = 0,     description = "トレイルなし" },
+	fire    = { name = "🔥 炎トレイル",     cost = 100,   description = "足元に炎が走る" },
+	ice     = { name = "❄️ 氷トレイル",    cost = 300,   description = "氷の結晶が散る" },
+	star    = { name = "⭐ 星トレイル",     cost = 800,   description = "星の軌跡を残す" },
+	rainbow = { name = "🌈 虹トレイル",     cost = 2000,  description = "虹色の光が溢れる" },
+	galaxy  = { name = "🌌 銀河トレイル",   cost = 10000, description = "銀河を纏う" },
+}
+Config.TrailsOrder = { "none", "fire", "ice", "star", "rainbow", "galaxy" }
+
+-- ===== トレーニングゾーンの範囲 =====
 Config.TrainingZoneBounds = {
 	MinX = -30, MaxX = 30,
 	MinZ =  20, MaxZ = 60,
 	MinY =  -5, MaxY = 20,
+}
+
+-- ===== リバースゾーンの範囲 =====
+Config.RebirthZoneBounds = {
+	MinX = -20, MaxX = 20,
+	MinZ = -40, MaxZ = -10,
+	MinY =  -5, MaxY = 20,
+}
+
+-- ===== ショップゾーンの範囲 =====
+Config.ShopZoneBounds = {
+	MinX =  50, MaxX = 100,
+	MinZ = -10, MaxZ =  30,
+	MinY =  -5, MaxY =  20,
+}
+
+-- ===== 落下足場システム =====
+Config.FallPlatform = {
+	Duration       = 30,
+	MinFallHeight  = 30,
+	PlatformSize   = Vector3.new(8, 1, 8),
+	SpawnOffsetY   = 5,
 }
 
 return Config
